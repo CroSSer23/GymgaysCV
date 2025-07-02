@@ -439,9 +439,21 @@ async function handlePhoto(msg) {
   }
 }
 
+// Функція для перевірки типу чату
+function isGroupChat(msg) {
+  return msg.chat.type === 'group' || msg.chat.type === 'supergroup';
+}
+
 async function handleRegularMessage(msg) {
   console.log('💬 Handling regular message:', msg.text);
   
+  // У групових чатах НЕ відповідаємо на звичайні повідомлення
+  if (isGroupChat(msg)) {
+    console.log('🤐 Ignoring regular text message in group chat');
+    return;
+  }
+  
+  // Тільки в приватних чатах надсилаємо інструкцію
   const chatId = msg.chat.id;
   await sendTelegramMessage(chatId, 
     '📸 Щоб зарахувати відвідування залу, надішли фото з тренування + хештег #gym!\n\n' +
@@ -746,6 +758,9 @@ module.exports = async (req, res) => {
       if (req.body.message) {
         console.log('💬 Processing message...');
         const msg = req.body.message;
+        const isGroup = isGroupChat(msg);
+        
+        console.log('💬 Chat type:', msg.chat.type, 'Is group:', isGroup);
         
         // Якщо це команда
         if (msg.text && msg.text.startsWith('/')) {
@@ -755,6 +770,16 @@ module.exports = async (req, res) => {
         // Якщо це фото
         else if (msg.photo) {
           console.log('📸 Processing photo...');
+          
+          // У групах обробляємо тільки фото з #gym
+          if (isGroup) {
+            const caption = msg.caption || '';
+            if (!caption.toLowerCase().includes('#gym')) {
+              console.log('🤐 Ignoring photo without #gym in group chat');
+              return;
+            }
+          }
+          
           await handlePhoto(msg);
         }
         // Звичайне повідомлення
