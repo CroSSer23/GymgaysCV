@@ -24,56 +24,67 @@ let auth, sheets;
 try {
   // Покращена обробка приватного ключа
   let processedPrivateKey = GOOGLE_PRIVATE_KEY;
+  let serviceAccountData = null;
+  
   if (processedPrivateKey) {
-    console.log('🔧 Original key format check:', {
+    console.log('🔧 Original key starts with:', processedPrivateKey.substring(0, 50));
+    
+    // Перевіряємо чи це JSON файл сервісного акаунта
+    try {
+      serviceAccountData = JSON.parse(processedPrivateKey);
+      console.log('📄 Detected service account JSON file');
+      
+      if (serviceAccountData.private_key) {
+        processedPrivateKey = serviceAccountData.private_key;
+        console.log('🔑 Extracted private_key from service account JSON');
+      } else {
+        console.error('❌ No private_key field found in service account JSON');
+      }
+    } catch (e) {
+      console.log('📝 Not a JSON file, treating as direct private key');
+    }
+    
+    console.log('🔧 After extraction, key format check:', {
       hasBeginMarker: processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----'),
       hasEndMarker: processedPrivateKey.includes('-----END PRIVATE KEY-----'),
       hasEscapedNewlines: processedPrivateKey.includes('\\n'),
-      hasActualNewlines: processedPrivateKey.includes('\n'),
-      startsWithQuote: processedPrivateKey.startsWith('"'),
-      endsWithQuote: processedPrivateKey.endsWith('"')
+      hasActualNewlines: processedPrivateKey.includes('\n')
     });
     
     // Очищуємо ключ від зайвих символів
     processedPrivateKey = processedPrivateKey.trim();
     
-    // Видаляємо лапки з початку і кінця (якщо ключ переданий як JSON string)
-    if (processedPrivateKey.startsWith('"') && processedPrivateKey.endsWith('"')) {
-      processedPrivateKey = processedPrivateKey.slice(1, -1);
-    }
-    
-    // Пробуємо розпарсити як JSON string якщо можливо
-    try {
-      const parsed = JSON.parse('"' + processedPrivateKey + '"');
-      if (typeof parsed === 'string' && parsed.includes('PRIVATE KEY')) {
-        processedPrivateKey = parsed;
-      }
-    } catch (e) {
-      // Не JSON, продовжуємо з оригінальним
-    }
-    
-    // Заміняємо різні варіанти нових рядків
+    // Заміняємо екрановані нові рядки на справжні
     processedPrivateKey = processedPrivateKey.replace(/\\n/g, '\n');
-    processedPrivateKey = processedPrivateKey.replace(/\\\n/g, '\n');
-    processedPrivateKey = processedPrivateKey.replace(/\\\\n/g, '\n');
-    
-    // Додаємо відсутні заголовки якщо потрібно
-    if (!processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----')) {
-      processedPrivateKey = `-----BEGIN PRIVATE KEY-----\n${processedPrivateKey}\n-----END PRIVATE KEY-----`;
-    }
     
     // Нормалізуємо нові рядки
     processedPrivateKey = processedPrivateKey.replace(/\r\n/g, '\n');
     processedPrivateKey = processedPrivateKey.replace(/\r/g, '\n');
+    
+    console.log('🔑 Final key validation:', {
+      hasBeginMarker: processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----'),
+      hasEndMarker: processedPrivateKey.includes('-----END PRIVATE KEY-----'),
+      keyLength: processedPrivateKey.length,
+      lineCount: processedPrivateKey.split('\n').length
+    });
   }
   
   console.log('🔑 Private key starts with:', processedPrivateKey ? processedPrivateKey.substring(0, 100) + '...' : 'NOT SET');
   console.log('🔑 Private key ends with:', processedPrivateKey ? '...' + processedPrivateKey.substring(processedPrivateKey.length - 100) : 'NOT SET');
   console.log('🔑 Private key length:', processedPrivateKey ? processedPrivateKey.length : 0);
-  console.log('📧 Service account email:', GOOGLE_SERVICE_ACCOUNT_EMAIL);
+  
+  // Створюємо JWT авторизацію
+  let serviceAccountEmail;
+  if (serviceAccountData && serviceAccountData.client_email) {
+    serviceAccountEmail = serviceAccountData.client_email;
+    console.log('📧 Using service account email from JSON:', serviceAccountEmail);
+  } else {
+    serviceAccountEmail = GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    console.log('📧 Using service account email from env:', serviceAccountEmail);
+  }
   
   auth = new google.auth.JWT(
-    GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    serviceAccountEmail,
     null,
     processedPrivateKey,
     ['https://www.googleapis.com/auth/spreadsheets']
