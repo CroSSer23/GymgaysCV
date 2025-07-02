@@ -2,14 +2,11 @@ const https = require('https');
 
 // Отримуємо змінні середовища
 const BOT_TOKEN = process.env.BOT_TOKEN || '7960558245:AAE95utDF8_bZTIgb_od0B6YM2ijfYqATBA';
+const VERCEL_URL = 'https://gymgays-cv-7ynm.vercel.app';
 
-if (!VERCEL_URL) {
-  console.error('❌ Помилка: Вкажи URL Vercel проекту');
-  console.log('Використання: node setup-webhook.js https://gymgays-cv-7ynm.vercel.app/');
-  process.exit(1);
-}
+console.log('🔗 Використовую Vercel URL:', VERCEL_URL);
 
-const webhookUrl = `https://gymgays-cv-7ynm.vercel.app/api/telegram`;
+const webhookUrl = `${VERCEL_URL}/api/telegram`;
 const telegramApiUrl = `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`;
 
 const data = JSON.stringify({
