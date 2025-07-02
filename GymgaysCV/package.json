@@ -1,0 +1,19 @@
+{
+  "name": "gym-attendance-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot для учёта посещений зала и ведения статистики в Google Sheets, развёрнутый на Vercel.",
+  "main": "api/telegram.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "dependencies": {
+    "telegraf": "^4.15.0",
+    "googleapis": "^126.0.0",
+    "dotenv": "^16.3.1"
+  }
+} 
