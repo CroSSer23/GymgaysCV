@@ -19,10 +19,24 @@ console.log('🔑 Token length:', BOT_TOKEN ? BOT_TOKEN.length : 'NOT SET');
 let auth, sheets;
 
 try {
+  // Покращена обробка приватного ключа
+  let processedPrivateKey = GOOGLE_PRIVATE_KEY;
+  if (processedPrivateKey) {
+    // Заміняємо \\n на справжні нові рядки
+    processedPrivateKey = processedPrivateKey.replace(/\\n/g, '\n');
+    // Додаємо відсутні заголовки якщо потрібно
+    if (!processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----')) {
+      processedPrivateKey = `-----BEGIN PRIVATE KEY-----\n${processedPrivateKey}\n-----END PRIVATE KEY-----`;
+    }
+  }
+  
+  console.log('🔑 Private key starts with:', processedPrivateKey ? processedPrivateKey.substring(0, 50) + '...' : 'NOT SET');
+  console.log('📧 Service account email:', GOOGLE_SERVICE_ACCOUNT_EMAIL);
+  
   auth = new google.auth.JWT(
     GOOGLE_SERVICE_ACCOUNT_EMAIL,
     null,
-    GOOGLE_PRIVATE_KEY,
+    processedPrivateKey,
     ['https://www.googleapis.com/auth/spreadsheets']
   );
 
@@ -30,6 +44,7 @@ try {
   console.log('📊 Google Sheets API initialized successfully');
 } catch (error) {
   console.error('❌ Error initializing Google Sheets API:', error.message);
+  console.error('❌ Full error:', error);
 }
 
 // Utility функції
@@ -109,31 +124,19 @@ async function handleCommand(msg) {
   
   try {
     if (command === '/start') {
-      // Спочатку спробуємо простіше повідомлення
-      const simpleMessage = 'Hello! Bot is working!';
-      
-      console.log('📝 Sending simple test message first');
-      await sendTelegramMessage(chatId, simpleMessage);
-      
-      // Невелика затримка
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Потім відправимо повне привітання
-      const welcomeMessage = `Gym Attendance Bot
+      const welcomeMessage = `🏋️‍♂️ Привіт! Це бот для відстеження відвідуваності спортзалу!
 
-Send a photo from the gym to record your visit
-/stats - your statistics
-/top - top visitors
-/help - help
+📸 Щоб зарахувати відвідування, надішли фото з залу
+📊 /stats - твоя статистика за місяць
+🏆 /top - топ відвідувачів
+❓ /help - допомога
 
-Let's stay in shape together!`;
+Давай тримати форму разом! 💪`;
       
-      console.log('📝 Sending full welcome message');
       await sendTelegramMessage(chatId, welcomeMessage);
       
     } else if (command === '/help') {
-      const helpMessage = `
-ℹ️ Як користуватися ботом:
+      const helpMessage = `ℹ️ Як користуватися ботом:
 
 1️⃣ Надішли фото з тренування в залі
 2️⃣ Бот автоматично зарахує відвідування
@@ -144,8 +147,7 @@ Let's stay in shape together!`;
 /top - рейтинг найактивніших учасників
 /help - ця довідка
 
-📊 Всі дані зберігаються в Google Sheets для відстеження прогресу!
-      `;
+📊 Всі дані зберігаються в Google Sheets для відстеження прогресу!`;
       
       await sendTelegramMessage(chatId, helpMessage);
       
@@ -153,11 +155,11 @@ Let's stay in shape together!`;
       const userId = msg.from.id;
       const firstName = msg.from.first_name;
       
-      const userAttendance = await getUserStats(userId);
-      const currentMonth = moment().format('MMMM YYYY');
-      
-      const statsMessage = `
-📊 Твоя статистика за ${currentMonth}:
+      try {
+        const userAttendance = await getUserStats(userId);
+        const currentMonth = moment().format('MMMM YYYY');
+        
+        const statsMessage = `📊 Твоя статистика за ${currentMonth}:
 
 🏋️‍♂️ Відвідувань: ${userAttendance}
 👤 ${firstName}
@@ -166,10 +168,13 @@ ${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній ч�
   userAttendance >= 15 ? '💪 Відмінно! Так тримати!' :
   userAttendance >= 10 ? '👍 Добре! Можеш ще краще!' :
   userAttendance >= 5 ? '😊 Непогано, але є куди рости!' :
-  '😅 Час активніше братися за тренування!'}
-      `;
-      
-      await sendTelegramMessage(chatId, statsMessage);
+  '😅 Час активніше братися за тренування!'}`;
+        
+        await sendTelegramMessage(chatId, statsMessage);
+      } catch (error) {
+        console.error('❌ Error getting user stats:', error);
+        await sendTelegramMessage(chatId, '⚠️ Статистика тимчасово недоступна через проблеми з Google Sheets. Спробуй пізніше!');
+      }
       
     } else if (command === '/top') {
       const topUsers = await getTopUsers();
@@ -252,9 +257,16 @@ async function handleRegularMessage(msg) {
 // Функція для збереження відвідування в Google Sheets
 async function saveAttendance(userId, userName, firstName, date) {
   try {
+    if (!sheets) {
+      console.error('❌ Google Sheets not initialized');
+      return false;
+    }
+    
     // Перевіряємо чи існує лист для поточного місяця
     const monthYear = getCurrentMonth();
     const sheetName = `Відвідуваність_${monthYear}`;
+    
+    console.log('📊 Trying to access Google Sheets:', GOOGLE_SHEETS_ID);
     
     // Спробуємо отримати дані з листа
     let sheetExists = true;
@@ -264,6 +276,7 @@ async function saveAttendance(userId, userName, firstName, date) {
         range: `${sheetName}!A1:Z1000`,
       });
     } catch (error) {
+      console.log('📄 Sheet does not exist, will create:', sheetName);
       sheetExists = false;
     }
 
@@ -314,6 +327,11 @@ async function saveAttendance(userId, userName, firstName, date) {
 // Функція для перевірки чи вже відвідував сьогодні
 async function checkTodayAttendance(userId) {
   try {
+    if (!sheets) {
+      console.error('❌ Google Sheets not initialized for attendance check');
+      return false; // Дозволити відвідування якщо не можемо перевірити
+    }
+    
     const monthYear = getCurrentMonth();
     const sheetName = `Відвідуваність_${monthYear}`;
     const today = getCurrentDate();
@@ -334,17 +352,24 @@ async function checkTodayAttendance(userId) {
     
     return false;
   } catch (error) {
-    console.error('Помилка при перевірці відвідування:', error);
-    return false;
+    console.error('❌ Помилка при перевірці відвідування:', error);
+    return false; // Дозволити відвідування якщо помилка
   }
 }
 
 // Функція для отримання статистики користувача
 async function getUserStats(userId) {
   try {
+    if (!sheets) {
+      console.error('❌ Google Sheets not initialized for stats');
+      return 0;
+    }
+    
     const monthYear = getCurrentMonth();
     const sheetName = `Відвідуваність_${monthYear}`;
 
+    console.log('📊 Getting user stats for sheet:', sheetName);
+    
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
       range: `${sheetName}!A:E`,
@@ -353,6 +378,8 @@ async function getUserStats(userId) {
     const rows = response.data.values || [];
     let userAttendance = 0;
     
+    console.log('📊 Found rows:', rows.length);
+    
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       if (row[0] == userId) {
@@ -360,10 +387,11 @@ async function getUserStats(userId) {
       }
     }
     
+    console.log('📊 User attendance count:', userAttendance);
     return userAttendance;
   } catch (error) {
-    console.error('Помилка при отриманні статистики:', error);
-    return 0;
+    console.error('❌ Помилка при отриманні статистики:', error);
+    throw error; // Пробрасываем ошибку чтобы ее обработал вызывающий код
   }
 }
 
