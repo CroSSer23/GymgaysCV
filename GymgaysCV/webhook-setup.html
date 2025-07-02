@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Встановлення Webhook для Telegram Bot</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f0f2f5; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .result { padding: 15px; margin: 20px 0; border-radius: 5px; font-family: monospace; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        button { background: #28a745; color: white; padding: 12px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #218838; }
+        .token { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #007bff; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Встановлення Webhook для Gym Bot</h1>
+        <p>Натисни кнопку щоб встановити webhook для нового бота:</p>
+        
+        <div class="token">
+            <strong>Bot Token:</strong> 7015889086:AAG1R8efw5Bt0Z1CZg0DiX_ohi5N7f1E6xI<br>
+            <strong>Webhook URL:</strong> https://gymgays-cv-7ynm.vercel.app/api/telegram
+        </div>
+        
+        <button onclick="setWebhook()">🚀 Встановити Webhook</button>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function setWebhook() {
+            const botToken = '7015889086:AAG1R8efw5Bt0Z1CZg0DiX_ohi5N7f1E6xI';
+            const webhookUrl = 'https://gymgays-cv-7ynm.vercel.app/api/telegram';
+            const resultDiv = document.getElementById('result');
+            
+            resultDiv.innerHTML = '<div class="result">⏳ Встановлюю webhook...</div>';
+            
+            try {
+                const url = `https://api.telegram.org/bot${botToken}/setWebhook`;
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        url: webhookUrl
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            ✅ <strong>Webhook встановлено успішно!</strong><br>
+                            Опис: ${data.description || 'Webhook активний'}<br>
+                            Бот готовий до роботи! 🎉
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            ❌ <strong>Помилка:</strong><br>
+                            ${data.description || 'Невідома помилка'}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        ❌ <strong>Помилка з'єднання:</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+            }
+        }
+        
+        // Можна також перевірити статус webhook
+        async function checkWebhook() {
+            const botToken = '7015889086:AAG1R8efw5Bt0Z1CZg0DiX_ohi5N7f1E6xI';
+            
+            try {
+                const url = `https://api.telegram.org/bot${botToken}/getWebhookInfo`;
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                console.log('Webhook info:', data);
+                
+                if (data.ok) {
+                    alert(`
+                        Webhook URL: ${data.result.url || 'Не встановлено'}
+                        Останнє оновлення: ${new Date(data.result.last_error_date * 1000) || 'Немає'}
+                        Статус: ${data.result.url ? 'Активний' : 'Неактивний'}
+                    `);
+                }
+            } catch (error) {
+                alert('Помилка перевірки: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html> 
