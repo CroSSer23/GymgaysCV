@@ -8,18 +8,29 @@ const GOOGLE_SHEETS_ID = process.env.GOOGLE_SHEETS_ID;
 const GOOGLE_SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-// Ініціалізація бота
-const bot = new TelegramBot(BOT_TOKEN);
+// Ініціалізація бота для webhook режиму
+const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
+
+// Логування ініціалізації
+console.log('🤖 Bot initialized in webhook mode');
+console.log('🔑 Token length:', BOT_TOKEN ? BOT_TOKEN.length : 'NOT SET');
 
 // Налаштування Google Sheets API
-const auth = new google.auth.JWT(
-  GOOGLE_SERVICE_ACCOUNT_EMAIL,
-  null,
-  GOOGLE_PRIVATE_KEY,
-  ['https://www.googleapis.com/auth/spreadsheets']
-);
+let auth, sheets;
 
-const sheets = google.sheets({ version: 'v4', auth });
+try {
+  auth = new google.auth.JWT(
+    GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    null,
+    GOOGLE_PRIVATE_KEY,
+    ['https://www.googleapis.com/auth/spreadsheets']
+  );
+
+  sheets = google.sheets({ version: 'v4', auth });
+  console.log('📊 Google Sheets API initialized successfully');
+} catch (error) {
+  console.error('❌ Error initializing Google Sheets API:', error.message);
+}
 
 // Utility функції
 function getCurrentDate() {
@@ -191,6 +202,7 @@ async function getTopUsers() {
 
 // Обробники команд
 bot.onText(/\/start/, (msg) => {
+  console.log('🚀 /start command received from:', msg.from.first_name, msg.from.id);
   const chatId = msg.chat.id;
   const welcomeMessage = `
 🏋️‍♂️ Привіт! Це бот для відстеження відвідуваності спортзалу!
@@ -203,7 +215,10 @@ bot.onText(/\/start/, (msg) => {
 Давай тримати форму разом! 💪
   `;
   
-  bot.sendMessage(chatId, welcomeMessage);
+  console.log('📤 Sending welcome message to chat:', chatId);
+  bot.sendMessage(chatId, welcomeMessage)
+    .then(() => console.log('✅ Welcome message sent successfully'))
+    .catch(error => console.error('❌ Error sending welcome message:', error));
 });
 
 bot.onText(/\/help/, (msg) => {
@@ -333,15 +348,33 @@ bot.on('message', (msg) => {
 
 // Webhook обробник для Vercel
 module.exports = async (req, res) => {
+  console.log('📨 Received request:', req.method);
+  
   if (req.method === 'POST') {
     try {
-      bot.processUpdate(req.body);
+      console.log('📥 Update received:', JSON.stringify(req.body, null, 2));
+      console.log('🔑 BOT_TOKEN exists:', !!BOT_TOKEN);
+      console.log('📋 GOOGLE_SHEETS_ID:', !!GOOGLE_SHEETS_ID);
+      console.log('📧 SERVICE_ACCOUNT_EMAIL:', !!GOOGLE_SERVICE_ACCOUNT_EMAIL);
+      console.log('🔐 PRIVATE_KEY exists:', !!GOOGLE_PRIVATE_KEY);
+      
+      await bot.processUpdate(req.body);
       res.status(200).json({ ok: true });
     } catch (error) {
-      console.error('Webhook error:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error('❌ Webhook error:', error);
+      res.status(500).json({ error: 'Internal server error', details: error.message });
     }
   } else {
-    res.status(200).json({ message: 'Gym Attendance Bot is running!' });
+    console.log('✅ Health check - Bot is running!');
+    res.status(200).json({ 
+      message: 'Gym Attendance Bot is running!',
+      timestamp: new Date().toISOString(),
+      env_check: {
+        bot_token: !!BOT_TOKEN,
+        sheets_id: !!GOOGLE_SHEETS_ID,
+        service_email: !!GOOGLE_SERVICE_ACCOUNT_EMAIL,
+        private_key: !!GOOGLE_PRIVATE_KEY
+      }
+    });
   }
 }; 
