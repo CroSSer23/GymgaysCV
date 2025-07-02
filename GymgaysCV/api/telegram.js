@@ -56,13 +56,15 @@ function sendTelegramMessage(chatId, text) {
       path: `/bot${BOT_TOKEN}/sendMessage`,
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': data.length
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Length': Buffer.byteLength(data, 'utf8')
       }
     };
 
     console.log('📤 Sending message to chat:', chatId);
     console.log('📦 Request data:', data);
+    console.log('📦 Data byte length:', Buffer.byteLength(data, 'utf8'));
+    console.log('📦 Text length:', text.length);
     
     const req = https.request(options, (res) => {
       let responseData = '';
@@ -93,7 +95,7 @@ function sendTelegramMessage(chatId, text) {
       reject(error);
     });
 
-    req.write(data);
+    req.write(data, 'utf8');
     req.end();
   });
 }
@@ -108,7 +110,7 @@ async function handleCommand(msg) {
   try {
     if (command === '/start') {
       // Спочатку спробуємо простіше повідомлення
-      const simpleMessage = 'Привіт! Бот працює!';
+      const simpleMessage = 'Hello! Bot is working!';
       
       console.log('📝 Sending simple test message first');
       await sendTelegramMessage(chatId, simpleMessage);
@@ -117,14 +119,14 @@ async function handleCommand(msg) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Потім відправимо повне привітання
-      const welcomeMessage = `🏋️‍♂️ Це бот для відстеження відвідуваності спортзалу!
+      const welcomeMessage = `Gym Attendance Bot
 
-📸 Надішли фото з залу для зарахування відвідування
-📊 /stats - твоя статистика
-🏆 /top - топ відвідувачів
-❓ /help - допомога
+Send a photo from the gym to record your visit
+/stats - your statistics
+/top - top visitors
+/help - help
 
-Давай тримати форму разом! 💪`;
+Let's stay in shape together!`;
       
       console.log('📝 Sending full welcome message');
       await sendTelegramMessage(chatId, welcomeMessage);
