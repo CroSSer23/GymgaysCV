@@ -1,6 +1,5 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { google } = require('googleapis');
-const https = require('https');
 const moment = require('moment');
 
 // Конфігурація
@@ -19,8 +18,8 @@ console.log('🔑 Token length:', BOT_TOKEN ? BOT_TOKEN.length : 'NOT SET');
 // Прапорець для режиму роботи
 let GOOGLE_SHEETS_AVAILABLE = false;
 
-// Налаштування Google Sheets та Drive API
-let auth, sheets, drive;
+// Налаштування Google Sheets API
+let auth, sheets;
 
 try {
   // Покращена обробка приватного ключа
@@ -88,17 +87,12 @@ try {
     serviceAccountEmail,
     null,
     processedPrivateKey,
-    [
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/drive.file'
-    ]
+    ['https://www.googleapis.com/auth/spreadsheets']
   );
 
   sheets = google.sheets({ version: 'v4', auth });
-  drive = google.drive({ version: 'v3', auth });
   GOOGLE_SHEETS_AVAILABLE = true;
   console.log('📊 Google Sheets API initialized successfully');
-  console.log('💾 Google Drive API initialized successfully');
 } catch (error) {
   GOOGLE_SHEETS_AVAILABLE = false;
   console.error('❌ Error initializing Google Sheets API:', error.message);
@@ -281,18 +275,15 @@ ${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній ч�
   }
 }
 
-// Функція для завантаження фото в Google Drive
-async function uploadPhotoToDrive(fileId, fileName, userId) {
+// Функція для отримання URL фото з Telegram API
+async function getTelegramPhotoUrl(fileId) {
   try {
-    if (!drive) {
-      console.error('❌ Google Drive not initialized');
-      return '';
-    }
-
-    console.log('💾 Starting photo upload to Drive for file:', fileId);
+    const https = require('https');
+    
+    console.log('📷 Getting Telegram photo URL for file:', fileId);
     
     // Отримуємо інформацію про файл від Telegram
-    const fileInfo = await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const options = {
         hostname: 'api.telegram.org',
         port: 443,
@@ -307,74 +298,29 @@ async function uploadPhotoToDrive(fileId, fileName, userId) {
           try {
             const response = JSON.parse(data);
             if (response.ok && response.result.file_path) {
-              resolve(response.result);
+              const photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${response.result.file_path}`;
+              console.log('✅ Telegram photo URL obtained:', photoUrl);
+              resolve(photoUrl);
             } else {
-              console.error('❌ Error getting file info:', response);
-              reject(new Error('Failed to get file info'));
+              console.error('❌ Error getting file path:', response);
+              resolve('');
             }
           } catch (e) {
             console.error('❌ Error parsing getFile response:', e);
-            reject(e);
+            resolve('');
           }
         });
       });
       
-      req.on('error', reject);
+      req.on('error', (error) => {
+        console.error('❌ Error getting photo URL:', error);
+        resolve('');
+      });
+      
       req.end();
     });
-
-    // Завантажуємо фото з Telegram
-    const photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileInfo.file_path}`;
-    console.log('📥 Downloading photo from Telegram:', photoUrl);
-    
-    const photoBuffer = await new Promise((resolve, reject) => {
-      https.get(photoUrl, (res) => {
-        const chunks = [];
-        res.on('data', (chunk) => chunks.push(chunk));
-        res.on('end', () => resolve(Buffer.concat(chunks)));
-        res.on('error', reject);
-      }).on('error', reject);
-    });
-
-    console.log('📤 Uploading photo to Google Drive, size:', photoBuffer.length, 'bytes');
-    
-    // Завантажуємо в Google Drive
-    const today = getCurrentDate();
-    const driveFileName = `gym_${userId}_${today}_${Date.now()}.jpg`;
-    
-    const driveResponse = await drive.files.create({
-      resource: {
-        name: driveFileName,
-        parents: [], // Завантажуємо в корінь Drive
-      },
-      media: {
-        mimeType: 'image/jpeg',
-        body: photoBuffer,
-      },
-    });
-
-    const fileId_drive = driveResponse.data.id;
-    console.log('✅ Photo uploaded to Drive with ID:', fileId_drive);
-
-    // Робимо файл публічно доступним
-    await drive.permissions.create({
-      fileId: fileId_drive,
-      resource: {
-        role: 'reader',
-        type: 'anyone',
-      },
-    });
-
-    // Отримуємо публічне посилання
-    const shareableLink = `https://drive.google.com/file/d/${fileId_drive}/view`;
-    const directImageLink = `https://drive.google.com/uc?export=view&id=${fileId_drive}`;
-    
-    console.log('🔗 Photo shareable link created:', shareableLink);
-    
-    return directImageLink; // Повертаємо прямий лінк для IMAGE() функції
-    
   } catch (error) {
-    console.error('❌ Error uploading photo to Drive:', error);
+    console.error('❌ Error in getTelegramPhotoUrl:', error);
     return '';
   }
 }
@@ -421,11 +367,11 @@ async function handlePhoto(msg) {
     // Отримуємо найбільше фото
     const photos = msg.photo;
     const largestPhoto = photos[photos.length - 1];
-    console.log('📷 Uploading photo for file_id:', largestPhoto.file_id);
+    console.log('📷 Getting photo URL for file_id:', largestPhoto.file_id);
     
-    // Завантажуємо фото в Google Drive
-    const photoUrl = await uploadPhotoToDrive(largestPhoto.file_id, `gym_photo_${userId}`, userId);
-    console.log('🔗 Photo Drive URL:', photoUrl ? 'uploaded successfully' : 'upload failed');
+    // Отримуємо URL фото з Telegram API
+    const photoUrl = await getTelegramPhotoUrl(largestPhoto.file_id);
+    console.log('🔗 Telegram photo URL:', photoUrl ? 'obtained successfully' : 'failed');
     
     // Зберігаємо відвідування з фото та текстом
     const saved = await saveAttendance(userId, userName, firstName, today, caption, photoUrl);
@@ -523,8 +469,8 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
     // Якщо є фото, використовуємо IMAGE() функцію для вставки зображення
     let photoFormula = '';
     if (photoUrl) {
-      photoFormula = `=IMAGE("${photoUrl}";1)`;
-      console.log('📸 Using IMAGE formula:', photoFormula);
+      photoFormula = `=IMAGE("${photoUrl}")`;
+      console.log('📸 Using IMAGE formula with Telegram URL:', photoFormula);
     }
     
     await sheets.spreadsheets.values.append({
