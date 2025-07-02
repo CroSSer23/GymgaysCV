@@ -1,7 +1,7 @@
 const https = require('https');
 
 // Отримуємо змінні середовища
-const BOT_TOKEN = process.env.BOT_TOKEN || '7960558245:AAE95utDF8_bZTIgb_od0B6YM2ijfYqATBA';
+const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const VERCEL_URL = 'https://gymgays-cv-7ynm.vercel.app';
 
 console.log('🔗 Використовую Vercel URL:', VERCEL_URL);
