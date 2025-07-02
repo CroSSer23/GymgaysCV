@@ -1,167 +1,347 @@
-const { Telegraf } = require('telegraf');
+const TelegramBot = require('node-telegram-bot-api');
 const { google } = require('googleapis');
+const moment = require('moment');
 
-/**
- * Получаем creds: либо пара EMAIL+KEY, либо цельный JSON в GOOGLE_CREDENTIALS
- */
-function getServiceAccountCreds() {
-  if (process.env.GOOGLE_CREDENTIALS) {
+// Конфігурація
+const BOT_TOKEN = process.env.BOT_TOKEN;
+const GOOGLE_SHEETS_ID = process.env.GOOGLE_SHEETS_ID;
+const GOOGLE_SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+
+// Ініціалізація бота
+const bot = new TelegramBot(BOT_TOKEN);
+
+// Налаштування Google Sheets API
+const auth = new google.auth.JWT(
+  GOOGLE_SERVICE_ACCOUNT_EMAIL,
+  null,
+  GOOGLE_PRIVATE_KEY,
+  ['https://www.googleapis.com/auth/spreadsheets']
+);
+
+const sheets = google.sheets({ version: 'v4', auth });
+
+// Utility функції
+function getCurrentDate() {
+  return moment().format('DD.MM.YYYY');
+}
+
+function getCurrentMonth() {
+  return moment().format('MM.YYYY');
+}
+
+// Функція для збереження відвідування в Google Sheets
+async function saveAttendance(userId, userName, firstName, date) {
+  try {
+    // Перевіряємо чи існує лист для поточного місяця
+    const monthYear = getCurrentMonth();
+    const sheetName = `Відвідуваність_${monthYear}`;
+    
+    // Спробуємо отримати дані з листа
+    let sheetExists = true;
     try {
-      const json = JSON.parse(process.env.GOOGLE_CREDENTIALS);
-      return {
-        client_email: json.client_email,
-        private_key: json.private_key,
-      };
-    } catch (e) {
-      console.error('Не удалось распарсить GOOGLE_CREDENTIALS. Убедитесь, что это корректный JSON.');
-    }
-  }
-  return {
-    client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    private_key: process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  };
-}
-
-function getSpreadsheetId() {
-  if (process.env.GOOGLE_SHEETS_ID) return process.env.GOOGLE_SHEETS_ID;
-  const url = process.env.GOOGLE_SHEETS_URL || '';
-  const m = url.match(/\/d\/([a-zA-Z0-9-_]+)(?:\/|$)/);
-  return m ? m[1] : undefined;
-}
-
-const creds = getServiceAccountCreds();
-const SPREADSHEET_ID = getSpreadsheetId();
-if (!SPREADSHEET_ID) throw new Error('Не задан Spreadsheet ID или URL (GOOGLE_SHEETS_ID / GOOGLE_SHEETS_URL)');
-
-/**
- * Создаём/кешируем экземпляры клиента Google Sheets.
- */
-let sheetsClient;
-function getSheetsClient() {
-  if (sheetsClient) return sheetsClient;
-
-  const auth = new google.auth.JWT(
-    creds.client_email,
-    null,
-    creds.private_key,
-    ['https://www.googleapis.com/auth/spreadsheets']
-  );
-  sheetsClient = google.sheets({ version: 'v4', auth });
-  return sheetsClient;
-}
-
-/**
- * Ленивая инициализация экземпляра бота.
- */
-const bot = new Telegraf(process.env.BOT_TOKEN);
-
-const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Attendance';
-
-const KEYWORDS = ['#gym', '#зал', 'gym', 'зал'];
-
-/**
- * Записываем факт посещения: дата, userId, username.
- */
-async function recordAttendance({ telegramId, username }) {
-  const sheets = getSheetsClient();
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-  // Добавляем строку
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_NAME}!A:C`,
-    valueInputOption: 'RAW',
-    requestBody: {
-      values: [[today, String(telegramId), username || '']],
-    },
-  });
-}
-
-/**
- * Получаем все строки посещений
- */
-async function fetchAttendanceRows() {
-  const sheets = getSheetsClient();
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${SHEET_NAME}!A:C`,
-  });
-  return res.data.values || [];
-}
-
-async function hasAttendanceToday(telegramId) {
-  const today = new Date().toISOString().slice(0, 10);
-  const rows = await fetchAttendanceRows();
-  return rows.some(([date, id]) => date === today && id === String(telegramId));
-}
-
-function isGymPhoto(ctx) {
-  const caption = ctx.message?.caption?.toLowerCase() || '';
-  return KEYWORDS.some((kw) => caption.includes(kw));
-}
-
-/**
- * Обработчик фото из чата
- */
-bot.on('photo', async (ctx) => {
-  try {
-    if (!isGymPhoto(ctx)) {
-      return ctx.reply('Щоб зарахувати тренування, додайте к фото хештег #gym (або #зал).');
+      await sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_SHEETS_ID,
+        range: `${sheetName}!A1:Z1000`,
+      });
+    } catch (error) {
+      sheetExists = false;
     }
 
-    const telegramId = ctx.from?.id;
-    const username = ctx.from?.username || ctx.from?.first_name || '';
+    // Створюємо новий лист якщо не існує
+    if (!sheetExists) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: GOOGLE_SHEETS_ID,
+        resource: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: sheetName
+              }
+            }
+          }]
+        }
+      });
 
-    if (await hasAttendanceToday(telegramId)) {
-      return ctx.reply('Ти вже зафіксував тренування сьогодні 💪. Побачимось завтра!');
+      // Додаємо заголовки
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: GOOGLE_SHEETS_ID,
+        range: `${sheetName}!A1:E1`,
+        valueInputOption: 'RAW',
+        resource: {
+          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Час']]
+        }
+      });
     }
 
-    await recordAttendance({ telegramId, username });
-
-    await ctx.reply('Тренировка засчитана! 💪');
-  } catch (err) {
-    console.error('Ошибка при записи в таблицу', err);
-    await ctx.reply('Упс, произошла ошибка при записи. Попробуйте ещё раз.');
-  }
-});
-
-/**
- * Команда статистики /stats
- */
-bot.command('stats', async (ctx) => {
-  try {
-    const rows = await fetchAttendanceRows();
-
-    // Пропускаем заголовок, если он есть
-    const stats = {};
-    rows.forEach(([date, userId, username]) => {
-      if (!username) username = userId;
-      stats[username] = (stats[username] || 0) + 1;
+    // Додаємо новий запис
+    const currentTime = moment().format('HH:mm:ss');
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: GOOGLE_SHEETS_ID,
+      range: `${sheetName}!A:E`,
+      valueInputOption: 'RAW',
+      resource: {
+        values: [[userId, userName, firstName, date, currentTime]]
+      }
     });
 
-    const messageLines = Object.entries(stats)
-      .sort((a, b) => b[1] - a[1])
-      .map(([user, count], idx) => `${idx + 1}. ${user}: ${count}`);
+    return true;
+  } catch (error) {
+    console.error('Помилка при збереженні в Google Sheets:', error);
+    return false;
+  }
+}
 
-    await ctx.reply(`Статистика посещений:\n${messageLines.join('\n')}`);
-  } catch (err) {
-    console.error('Ошибка получения статистики', err);
-    await ctx.reply('Не удалось получить статистику.');
+// Функція для перевірки чи вже відвідував сьогодні
+async function checkTodayAttendance(userId) {
+  try {
+    const monthYear = getCurrentMonth();
+    const sheetName = `Відвідуваність_${monthYear}`;
+    const today = getCurrentDate();
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEETS_ID,
+      range: `${sheetName}!A:E`,
+    });
+
+    const rows = response.data.values || [];
+    
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] == userId && row[3] === today) {
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Помилка при перевірці відвідування:', error);
+    return false;
+  }
+}
+
+// Функція для отримання статистики користувача
+async function getUserStats(userId) {
+  try {
+    const monthYear = getCurrentMonth();
+    const sheetName = `Відвідуваність_${monthYear}`;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEETS_ID,
+      range: `${sheetName}!A:E`,
+    });
+
+    const rows = response.data.values || [];
+    let userAttendance = 0;
+    
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (row[0] == userId) {
+        userAttendance++;
+      }
+    }
+    
+    return userAttendance;
+  } catch (error) {
+    console.error('Помилка при отриманні статистики:', error);
+    return 0;
+  }
+}
+
+// Функція для отримання топ користувачів
+async function getTopUsers() {
+  try {
+    const monthYear = getCurrentMonth();
+    const sheetName = `Відвідуваність_${monthYear}`;
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEETS_ID,
+      range: `${sheetName}!A:E`,
+    });
+
+    const rows = response.data.values || [];
+    const userStats = {};
+    
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const userId = row[0];
+      const userName = row[2] || row[1];
+      
+      if (!userStats[userId]) {
+        userStats[userId] = {
+          name: userName,
+          count: 0
+        };
+      }
+      userStats[userId].count++;
+    }
+    
+    // Сортуємо за кількістю відвідувань
+    const sortedUsers = Object.entries(userStats)
+      .map(([userId, data]) => ({ userId, ...data }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+    
+    return sortedUsers;
+  } catch (error) {
+    console.error('Помилка при отриманні топ користувачів:', error);
+    return [];
+  }
+}
+
+// Обробники команд
+bot.onText(/\/start/, (msg) => {
+  const chatId = msg.chat.id;
+  const welcomeMessage = `
+🏋️‍♂️ Привіт! Це бот для відстеження відвідуваності спортзалу!
+
+📸 Щоб зарахувати відвідування, надішли фото з залу
+📊 /stats - твоя статистика за місяць
+🏆 /top - топ відвідувачів
+❓ /help - допомога
+
+Давай тримати форму разом! 💪
+  `;
+  
+  bot.sendMessage(chatId, welcomeMessage);
+});
+
+bot.onText(/\/help/, (msg) => {
+  const chatId = msg.chat.id;
+  const helpMessage = `
+ℹ️ Як користуватися ботом:
+
+1️⃣ Надішли фото з тренування в залі
+2️⃣ Бот автоматично зарахує відвідування
+3️⃣ Один день = одне відвідування (навіть якщо фото кілька)
+
+📋 Команди:
+/stats - твоя статистика за поточний місяць
+/top - рейтинг найактивніших учасників
+/help - ця довідка
+
+📊 Всі дані зберігаються в Google Sheets для відстеження прогресу!
+  `;
+  
+  bot.sendMessage(chatId, helpMessage);
+});
+
+bot.onText(/\/stats/, async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const firstName = msg.from.first_name;
+  
+  try {
+    const userAttendance = await getUserStats(userId);
+    const currentMonth = moment().format('MMMM YYYY');
+    
+    const statsMessage = `
+📊 Твоя статистика за ${currentMonth}:
+
+🏋️‍♂️ Відвідувань: ${userAttendance}
+👤 ${firstName}
+
+${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній чемпіон!' :
+  userAttendance >= 15 ? '💪 Відмінно! Так тримати!' :
+  userAttendance >= 10 ? '👍 Добре! Можеш ще краще!' :
+  userAttendance >= 5 ? '😊 Непогано, але є куди рости!' :
+  '😅 Час активніше братися за тренування!'}
+    `;
+    
+    bot.sendMessage(chatId, statsMessage);
+  } catch (error) {
+    bot.sendMessage(chatId, '❌ Виникла помилка при отриманні статистики. Спробуй пізніше.');
   }
 });
 
-// Предотвращаем автоматический запуск long-polling в среде Serverless
-bot.telegram.deleteWebhook().catch(() => {});
+bot.onText(/\/top/, async (msg) => {
+  const chatId = msg.chat.id;
+  
+  try {
+    const topUsers = await getTopUsers();
+    const currentMonth = moment().format('MMMM YYYY');
+    
+    if (topUsers.length === 0) {
+      bot.sendMessage(chatId, '📊 Поки немає даних про відвідування цього місяця.');
+      return;
+    }
+    
+    let topMessage = `🏆 Топ відвідувачів за ${currentMonth}:\n\n`;
+    
+    topUsers.forEach((user, index) => {
+      const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏅';
+      topMessage += `${medal} ${index + 1}. ${user.name} - ${user.count} відвідувань\n`;
+    });
+    
+    topMessage += '\n💪 Так тримати, чемпіони!';
+    
+    bot.sendMessage(chatId, topMessage);
+  } catch (error) {
+    bot.sendMessage(chatId, '❌ Виникла помилка при отриманні рейтингу. Спробуй пізніше.');
+  }
+});
 
+// Обробка фото
+bot.on('photo', async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const userName = msg.from.username || '';
+  const firstName = msg.from.first_name || 'Невідомо';
+  const today = getCurrentDate();
+  
+  try {
+    // Перевіряємо чи вже відвідував сьогодні
+    const alreadyVisited = await checkTodayAttendance(userId);
+    
+    if (alreadyVisited) {
+      bot.sendMessage(chatId, `✅ ${firstName}, твоє відвідування на сьогодні (${today}) вже зараховано! 🏋️‍♂️`);
+      return;
+    }
+    
+    // Зберігаємо відвідування
+    const saved = await saveAttendance(userId, userName, firstName, today);
+    
+    if (saved) {
+      const userStats = await getUserStats(userId);
+      bot.sendMessage(chatId, 
+        `🎉 Відмінно, ${firstName}! Відвідування зараховано!\n\n` +
+        `📅 Дата: ${today}\n` +
+        `🏋️‍♂️ Твоїх відвідувань цього місяця: ${userStats}\n\n` +
+        `Так тримати! 💪`
+      );
+    } else {
+      bot.sendMessage(chatId, '❌ Виникла помилка при збереженні. Спробуй ще раз.');
+    }
+    
+  } catch (error) {
+    console.error('Помилка при обробці фото:', error);
+    bot.sendMessage(chatId, '❌ Виникла помилка. Спробуй ще раз пізніше.');
+  }
+});
+
+// Обробка всіх інших повідомлень
+bot.on('message', (msg) => {
+  // Ігноруємо команди та фото (вони обробляються окремо)
+  if (msg.text && !msg.text.startsWith('/') && !msg.photo) {
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId, 
+      '📸 Щоб зарахувати відвідування залу, надішли фото з тренування!\n\n' +
+      'ℹ️ /help - для допомоги'
+    );
+  }
+});
+
+// Webhook обробник для Vercel
 module.exports = async (req, res) => {
   if (req.method === 'POST') {
     try {
-      await bot.handleUpdate(req.body);
-    } catch (err) {
-      console.error('Ошибка обработки обновления', err);
+      bot.processUpdate(req.body);
+      res.status(200).json({ ok: true });
+    } catch (error) {
+      console.error('Webhook error:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-    return res.status(200).json({ ok: true });
+  } else {
+    res.status(200).json({ message: 'Gym Attendance Bot is running!' });
   }
-  // Для GET-запросов просто подтверждаем, что функция жива
-  res.status(200).send('Gym Attendance Bot is up.');
 }; 
