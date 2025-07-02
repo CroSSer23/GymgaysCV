@@ -8,11 +8,11 @@ const GOOGLE_SHEETS_ID = process.env.GOOGLE_SHEETS_ID;
 const GOOGLE_SERVICE_ACCOUNT_EMAIL = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
 const GOOGLE_PRIVATE_KEY = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
-// Ініціалізація бота для webhook режиму
-const bot = new TelegramBot(BOT_TOKEN, { webHook: true });
+// Ініціалізація бота для webhook режиму (без polling)
+const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 
 // Логування ініціалізації
-console.log('🤖 Bot initialized in webhook mode');
+console.log('🤖 Bot initialized for webhook mode');
 console.log('🔑 Token length:', BOT_TOKEN ? BOT_TOKEN.length : 'NOT SET');
 
 // Налаштування Google Sheets API
@@ -39,6 +39,50 @@ function getCurrentDate() {
 
 function getCurrentMonth() {
   return moment().format('MM.YYYY');
+}
+
+// Функція для надійної відправки повідомлень
+function sendTelegramMessage(chatId, text) {
+  return new Promise((resolve, reject) => {
+    const https = require('https');
+    const data = JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML'
+    });
+
+    const options = {
+      hostname: 'api.telegram.org',
+      port: 443,
+      path: `/bot${BOT_TOKEN}/sendMessage`,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': data.length
+      }
+    };
+
+    console.log('📤 Sending message to chat:', chatId);
+    
+    const req = https.request(options, (res) => {
+      let responseData = '';
+      res.on('data', (chunk) => {
+        responseData += chunk;
+      });
+      res.on('end', () => {
+        console.log('✅ Message sent successfully');
+        resolve(responseData);
+      });
+    });
+
+    req.on('error', (error) => {
+      console.error('❌ Error sending message:', error);
+      reject(error);
+    });
+
+    req.write(data);
+    req.end();
+  });
 }
 
 // Функція для збереження відвідування в Google Sheets
@@ -215,13 +259,13 @@ bot.onText(/\/start/, (msg) => {
 Давай тримати форму разом! 💪
   `;
   
-  console.log('📤 Sending welcome message to chat:', chatId);
-  bot.sendMessage(chatId, welcomeMessage)
+  sendTelegramMessage(chatId, welcomeMessage)
     .then(() => console.log('✅ Welcome message sent successfully'))
     .catch(error => console.error('❌ Error sending welcome message:', error));
 });
 
 bot.onText(/\/help/, (msg) => {
+  console.log('❓ /help command received from:', msg.from.first_name, msg.from.id);
   const chatId = msg.chat.id;
   const helpMessage = `
 ℹ️ Як користуватися ботом:
@@ -238,7 +282,9 @@ bot.onText(/\/help/, (msg) => {
 📊 Всі дані зберігаються в Google Sheets для відстеження прогресу!
   `;
   
-  bot.sendMessage(chatId, helpMessage);
+  sendTelegramMessage(chatId, helpMessage)
+    .then(() => console.log('✅ Help message sent successfully'))
+    .catch(error => console.error('❌ Error sending help message:', error));
 });
 
 bot.onText(/\/stats/, async (msg) => {
@@ -263,9 +309,12 @@ ${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній ч�
   '😅 Час активніше братися за тренування!'}
     `;
     
-    bot.sendMessage(chatId, statsMessage);
+    sendTelegramMessage(chatId, statsMessage)
+      .then(() => console.log('✅ Stats message sent successfully'))
+      .catch(error => console.error('❌ Error sending stats message:', error));
   } catch (error) {
-    bot.sendMessage(chatId, '❌ Виникла помилка при отриманні статистики. Спробуй пізніше.');
+    sendTelegramMessage(chatId, '❌ Виникла помилка при отриманні статистики. Спробуй пізніше.')
+      .catch(err => console.error('❌ Error sending error message:', err));
   }
 });
 
@@ -277,7 +326,8 @@ bot.onText(/\/top/, async (msg) => {
     const currentMonth = moment().format('MMMM YYYY');
     
     if (topUsers.length === 0) {
-      bot.sendMessage(chatId, '📊 Поки немає даних про відвідування цього місяця.');
+      sendTelegramMessage(chatId, '📊 Поки немає даних про відвідування цього місяця.')
+        .catch(error => console.error('❌ Error sending no data message:', error));
       return;
     }
     
@@ -290,9 +340,12 @@ bot.onText(/\/top/, async (msg) => {
     
     topMessage += '\n💪 Так тримати, чемпіони!';
     
-    bot.sendMessage(chatId, topMessage);
+    sendTelegramMessage(chatId, topMessage)
+      .then(() => console.log('✅ Top message sent successfully'))
+      .catch(error => console.error('❌ Error sending top message:', error));
   } catch (error) {
-    bot.sendMessage(chatId, '❌ Виникла помилка при отриманні рейтингу. Спробуй пізніше.');
+    sendTelegramMessage(chatId, '❌ Виникла помилка при отриманні рейтингу. Спробуй пізніше.')
+      .catch(err => console.error('❌ Error sending error message:', err));
   }
 });
 
@@ -309,7 +362,8 @@ bot.on('photo', async (msg) => {
     const alreadyVisited = await checkTodayAttendance(userId);
     
     if (alreadyVisited) {
-      bot.sendMessage(chatId, `✅ ${firstName}, твоє відвідування на сьогодні (${today}) вже зараховано! 🏋️‍♂️`);
+      sendTelegramMessage(chatId, `✅ ${firstName}, твоє відвідування на сьогодні (${today}) вже зараховано! 🏋️‍♂️`)
+        .catch(error => console.error('❌ Error sending already visited message:', error));
       return;
     }
     
@@ -318,19 +372,23 @@ bot.on('photo', async (msg) => {
     
     if (saved) {
       const userStats = await getUserStats(userId);
-      bot.sendMessage(chatId, 
-        `🎉 Відмінно, ${firstName}! Відвідування зараховано!\n\n` +
+      const successMessage = `🎉 Відмінно, ${firstName}! Відвідування зараховано!\n\n` +
         `📅 Дата: ${today}\n` +
         `🏋️‍♂️ Твоїх відвідувань цього місяця: ${userStats}\n\n` +
-        `Так тримати! 💪`
-      );
+        `Так тримати! 💪`;
+      
+      sendTelegramMessage(chatId, successMessage)
+        .then(() => console.log('✅ Attendance success message sent'))
+        .catch(error => console.error('❌ Error sending attendance message:', error));
     } else {
-      bot.sendMessage(chatId, '❌ Виникла помилка при збереженні. Спробуй ще раз.');
+      sendTelegramMessage(chatId, '❌ Виникла помилка при збереженні. Спробуй ще раз.')
+        .catch(error => console.error('❌ Error sending save error message:', error));
     }
     
   } catch (error) {
-    console.error('Помилка при обробці фото:', error);
-    bot.sendMessage(chatId, '❌ Виникла помилка. Спробуй ще раз пізніше.');
+    console.error('❌ Помилка при обробці фото:', error);
+    sendTelegramMessage(chatId, '❌ Виникла помилка. Спробуй ще раз пізніше.')
+      .catch(err => console.error('❌ Error sending general error message:', err));
   }
 });
 
@@ -338,11 +396,13 @@ bot.on('photo', async (msg) => {
 bot.on('message', (msg) => {
   // Ігноруємо команди та фото (вони обробляються окремо)
   if (msg.text && !msg.text.startsWith('/') && !msg.photo) {
+    console.log('💬 Regular message received:', msg.text);
     const chatId = msg.chat.id;
-    bot.sendMessage(chatId, 
+    
+    sendTelegramMessage(chatId, 
       '📸 Щоб зарахувати відвідування залу, надішли фото з тренування!\n\n' +
       'ℹ️ /help - для допомоги'
-    );
+    ).catch(error => console.error('❌ Error sending instruction message:', error));
   }
 });
 
@@ -358,7 +418,23 @@ module.exports = async (req, res) => {
       console.log('📧 SERVICE_ACCOUNT_EMAIL:', !!GOOGLE_SERVICE_ACCOUNT_EMAIL);
       console.log('🔐 PRIVATE_KEY exists:', !!GOOGLE_PRIVATE_KEY);
       
-      await bot.processUpdate(req.body);
+      // Обробляємо оновлення вручну
+      if (req.body.message) {
+        console.log('💬 Processing message...');
+        bot.emit('message', req.body.message);
+        
+        // Якщо це команда
+        if (req.body.message.text && req.body.message.text.startsWith('/')) {
+          console.log('⚡ Processing command:', req.body.message.text);
+          bot.emit('text', req.body.message);
+        }
+        
+        // Якщо це фото
+        if (req.body.message.photo) {
+          console.log('📸 Processing photo...');
+          bot.emit('photo', req.body.message);
+        }
+      }
       res.status(200).json({ ok: true });
     } catch (error) {
       console.error('❌ Webhook error:', error);
