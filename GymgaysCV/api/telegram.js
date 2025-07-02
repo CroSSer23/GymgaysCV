@@ -47,8 +47,7 @@ function sendTelegramMessage(chatId, text) {
     const https = require('https');
     const data = JSON.stringify({
       chat_id: chatId,
-      text: text,
-      parse_mode: 'HTML'
+      text: text
     });
 
     const options = {
@@ -63,6 +62,7 @@ function sendTelegramMessage(chatId, text) {
     };
 
     console.log('📤 Sending message to chat:', chatId);
+    console.log('📦 Request data:', data);
     
     const req = https.request(options, (res) => {
       let responseData = '';
@@ -70,7 +70,20 @@ function sendTelegramMessage(chatId, text) {
         responseData += chunk;
       });
       res.on('end', () => {
-        console.log('✅ Message sent successfully');
+        console.log('📡 Telegram API response status:', res.statusCode);
+        console.log('📡 Telegram API response:', responseData);
+        
+        try {
+          const parsedResponse = JSON.parse(responseData);
+          if (parsedResponse.ok) {
+            console.log('✅ Message sent successfully');
+          } else {
+            console.error('❌ Telegram API error:', parsedResponse.description);
+          }
+        } catch (e) {
+          console.error('❌ Failed to parse Telegram response:', responseData);
+        }
+        
         resolve(responseData);
       });
     });
@@ -94,17 +107,26 @@ async function handleCommand(msg) {
   
   try {
     if (command === '/start') {
-      const welcomeMessage = `
-🏋️‍♂️ Привіт! Це бот для відстеження відвідуваності спортзалу!
+      // Спочатку спробуємо простіше повідомлення
+      const simpleMessage = 'Привіт! Бот працює!';
+      
+      console.log('📝 Sending simple test message first');
+      await sendTelegramMessage(chatId, simpleMessage);
+      
+      // Невелика затримка
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Потім відправимо повне привітання
+      const welcomeMessage = `🏋️‍♂️ Це бот для відстеження відвідуваності спортзалу!
 
-📸 Щоб зарахувати відвідування, надішли фото з залу
-📊 /stats - твоя статистика за місяць
+📸 Надішли фото з залу для зарахування відвідування
+📊 /stats - твоя статистика
 🏆 /top - топ відвідувачів
 ❓ /help - допомога
 
-Давай тримати форму разом! 💪
-      `;
+Давай тримати форму разом! 💪`;
       
+      console.log('📝 Sending full welcome message');
       await sendTelegramMessage(chatId, welcomeMessage);
       
     } else if (command === '/help') {
