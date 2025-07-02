@@ -15,6 +15,9 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 console.log('🤖 Bot initialized for webhook mode');
 console.log('🔑 Token length:', BOT_TOKEN ? BOT_TOKEN.length : 'NOT SET');
 
+// Прапорець для режиму роботи
+let GOOGLE_SHEETS_AVAILABLE = false;
+
 // Налаштування Google Sheets API
 let auth, sheets;
 
@@ -22,15 +25,51 @@ try {
   // Покращена обробка приватного ключа
   let processedPrivateKey = GOOGLE_PRIVATE_KEY;
   if (processedPrivateKey) {
-    // Заміняємо \\n на справжні нові рядки
+    console.log('🔧 Original key format check:', {
+      hasBeginMarker: processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----'),
+      hasEndMarker: processedPrivateKey.includes('-----END PRIVATE KEY-----'),
+      hasEscapedNewlines: processedPrivateKey.includes('\\n'),
+      hasActualNewlines: processedPrivateKey.includes('\n'),
+      startsWithQuote: processedPrivateKey.startsWith('"'),
+      endsWithQuote: processedPrivateKey.endsWith('"')
+    });
+    
+    // Очищуємо ключ від зайвих символів
+    processedPrivateKey = processedPrivateKey.trim();
+    
+    // Видаляємо лапки з початку і кінця (якщо ключ переданий як JSON string)
+    if (processedPrivateKey.startsWith('"') && processedPrivateKey.endsWith('"')) {
+      processedPrivateKey = processedPrivateKey.slice(1, -1);
+    }
+    
+    // Пробуємо розпарсити як JSON string якщо можливо
+    try {
+      const parsed = JSON.parse('"' + processedPrivateKey + '"');
+      if (typeof parsed === 'string' && parsed.includes('PRIVATE KEY')) {
+        processedPrivateKey = parsed;
+      }
+    } catch (e) {
+      // Не JSON, продовжуємо з оригінальним
+    }
+    
+    // Заміняємо різні варіанти нових рядків
     processedPrivateKey = processedPrivateKey.replace(/\\n/g, '\n');
+    processedPrivateKey = processedPrivateKey.replace(/\\\n/g, '\n');
+    processedPrivateKey = processedPrivateKey.replace(/\\\\n/g, '\n');
+    
     // Додаємо відсутні заголовки якщо потрібно
     if (!processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----')) {
       processedPrivateKey = `-----BEGIN PRIVATE KEY-----\n${processedPrivateKey}\n-----END PRIVATE KEY-----`;
     }
+    
+    // Нормалізуємо нові рядки
+    processedPrivateKey = processedPrivateKey.replace(/\r\n/g, '\n');
+    processedPrivateKey = processedPrivateKey.replace(/\r/g, '\n');
   }
   
-  console.log('🔑 Private key starts with:', processedPrivateKey ? processedPrivateKey.substring(0, 50) + '...' : 'NOT SET');
+  console.log('🔑 Private key starts with:', processedPrivateKey ? processedPrivateKey.substring(0, 100) + '...' : 'NOT SET');
+  console.log('🔑 Private key ends with:', processedPrivateKey ? '...' + processedPrivateKey.substring(processedPrivateKey.length - 100) : 'NOT SET');
+  console.log('🔑 Private key length:', processedPrivateKey ? processedPrivateKey.length : 0);
   console.log('📧 Service account email:', GOOGLE_SERVICE_ACCOUNT_EMAIL);
   
   auth = new google.auth.JWT(
@@ -41,10 +80,13 @@ try {
   );
 
   sheets = google.sheets({ version: 'v4', auth });
+  GOOGLE_SHEETS_AVAILABLE = true;
   console.log('📊 Google Sheets API initialized successfully');
 } catch (error) {
+  GOOGLE_SHEETS_AVAILABLE = false;
   console.error('❌ Error initializing Google Sheets API:', error.message);
   console.error('❌ Full error:', error);
+  console.log('⚠️ Bot will work in fallback mode without Google Sheets');
 }
 
 // Utility функції
@@ -177,24 +219,34 @@ ${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній ч�
       }
       
     } else if (command === '/top') {
-      const topUsers = await getTopUsers();
-      const currentMonth = moment().format('MMMM YYYY');
-      
-      if (topUsers.length === 0) {
-        await sendTelegramMessage(chatId, '📊 Поки немає даних про відвідування цього місяця.');
+      if (!GOOGLE_SHEETS_AVAILABLE) {
+        await sendTelegramMessage(chatId, '⚠️ Рейтинг тимчасово недоступний. Google Sheets не підключені. Зверніться до адміністратора бота! 🛠️');
         return;
       }
       
-      let topMessage = `🏆 Топ відвідувачів за ${currentMonth}:\n\n`;
-      
-      topUsers.forEach((user, index) => {
-        const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏅';
-        topMessage += `${medal} ${index + 1}. ${user.name} - ${user.count} відвідувань\n`;
-      });
-      
-      topMessage += '\n💪 Так тримати, чемпіони!';
-      
-      await sendTelegramMessage(chatId, topMessage);
+      try {
+        const topUsers = await getTopUsers();
+        const currentMonth = moment().format('MMMM YYYY');
+        
+        if (topUsers.length === 0) {
+          await sendTelegramMessage(chatId, '📊 Поки немає даних про відвідування цього місяця.');
+          return;
+        }
+        
+        let topMessage = `🏆 Топ відвідувачів за ${currentMonth}:\n\n`;
+        
+        topUsers.forEach((user, index) => {
+          const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏅';
+          topMessage += `${medal} ${index + 1}. ${user.name} - ${user.count} відвідувань\n`;
+        });
+        
+        topMessage += '\n💪 Так тримати, чемпіони!';
+        
+        await sendTelegramMessage(chatId, topMessage);
+      } catch (error) {
+        console.error('❌ Error getting top users:', error);
+        await sendTelegramMessage(chatId, '⚠️ Рейтинг тимчасово недоступний через проблеми з Google Sheets. Спробуй пізніше!');
+      }
     }
     
   } catch (error) {
@@ -212,6 +264,14 @@ async function handlePhoto(msg) {
   const userName = msg.from.username || '';
   const firstName = msg.from.first_name || 'Невідомо';
   const today = getCurrentDate();
+  
+  if (!GOOGLE_SHEETS_AVAILABLE) {
+    await sendTelegramMessage(chatId, 
+      `📸 ${firstName}, фото отримано! Але зберегти відвідування не можу - Google Sheets недоступні.\n\n` +
+      `⚠️ Зверніться до адміністратора бота для налаштування збереження даних.`
+    );
+    return;
+  }
   
   try {
     // Перевіряємо чи вже відвідував сьогодні
