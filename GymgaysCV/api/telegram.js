@@ -538,15 +538,6 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
       console.log('🎨 Formatted new sheet dimensions:', sheetName);
     }
 
-    // Отримуємо поточну кількість рядків для визначення нового індексу
-    const existingData = await sheets.spreadsheets.values.get({
-      spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`
-    });
-    
-    const currentRowCount = existingData.data.values ? existingData.data.values.length : 0;
-    const newRowIndex = currentRowCount + 1; // +1 для нового рядка (1-based)
-    
     // Додаємо новий запис
     const currentTime = moment().format('HH:mm:ss');
     
@@ -566,9 +557,18 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
       }
     });
 
-    // Форматуємо розміри колонки та рядка
-    await formatSheetDimensions(sheetName, newRowIndex);
-    console.log('🎨 Applied formatting for row:', newRowIndex);
+    // ПІСЛЯ вставки даних отримуємо актуальну кількість рядків
+    const updatedData = await sheets.spreadsheets.values.get({
+      spreadsheetId: GOOGLE_SHEETS_ID,
+      range: `${sheetName}!A:G`
+    });
+    
+    const actualRowCount = updatedData.data.values ? updatedData.data.values.length : 0;
+    console.log('📊 Actual row count after insert:', actualRowCount);
+    
+    // Форматуємо розміри колонки та останнього рядка (де щойно вставили дані)
+    await formatSheetDimensions(sheetName, actualRowCount);
+    console.log('🎨 Applied formatting for actual row:', actualRowCount);
 
     return true;
   } catch (error) {
