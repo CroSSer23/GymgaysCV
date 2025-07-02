@@ -267,6 +267,53 @@ ${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній ч�
   }
 }
 
+// Функція для отримання посилання на фото
+async function getPhotoUrl(fileId) {
+  try {
+    const https = require('https');
+    
+    // Отримуємо інформацію про файл
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: 'api.telegram.org',
+        port: 443,
+        path: `/bot${BOT_TOKEN}/getFile?file_id=${fileId}`,
+        method: 'GET'
+      };
+      
+      const req = https.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(data);
+            if (response.ok && response.result.file_path) {
+              const photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${response.result.file_path}`;
+              resolve(photoUrl);
+            } else {
+              console.error('❌ Error getting file path:', response);
+              resolve('');
+            }
+          } catch (e) {
+            console.error('❌ Error parsing getFile response:', e);
+            resolve('');
+          }
+        });
+      });
+      
+      req.on('error', (error) => {
+        console.error('❌ Error getting photo URL:', error);
+        resolve('');
+      });
+      
+      req.end();
+    });
+  } catch (error) {
+    console.error('❌ Error in getPhotoUrl:', error);
+    return '';
+  }
+}
+
 async function handlePhoto(msg) {
   console.log('📸 Handling photo from:', msg.from.first_name, msg.from.id);
   
@@ -275,6 +322,7 @@ async function handlePhoto(msg) {
   const userName = msg.from.username || '';
   const firstName = msg.from.first_name || 'Невідомо';
   const today = getCurrentDate();
+  const caption = msg.caption || '';
   
   if (!GOOGLE_SHEETS_AVAILABLE) {
     await sendTelegramMessage(chatId, 
@@ -293,15 +341,29 @@ async function handlePhoto(msg) {
       return;
     }
     
-    // Зберігаємо відвідування
-    const saved = await saveAttendance(userId, userName, firstName, today);
+    // Отримуємо найбільше фото
+    const photos = msg.photo;
+    const largestPhoto = photos[photos.length - 1];
+    console.log('📷 Getting photo URL for file_id:', largestPhoto.file_id);
+    
+    // Отримуємо посилання на фото
+    const photoUrl = await getPhotoUrl(largestPhoto.file_id);
+    console.log('🔗 Photo URL:', photoUrl ? 'obtained' : 'failed');
+    
+    // Зберігаємо відвідування з фото та текстом
+    const saved = await saveAttendance(userId, userName, firstName, today, caption, photoUrl);
     
     if (saved) {
       const userStats = await getUserStats(userId);
-      const successMessage = `🎉 Відмінно, ${firstName}! Відвідування зараховано!\n\n` +
+      let successMessage = `🎉 Відмінно, ${firstName}! Відвідування зараховано!\n\n` +
         `📅 Дата: ${today}\n` +
-        `🏋️‍♂️ Твоїх відвідувань цього місяця: ${userStats}\n\n` +
-        `Так тримати! 💪`;
+        `🏋️‍♂️ Твоїх відвідувань цього місяця: ${userStats}\n`;
+      
+      if (caption) {
+        successMessage += `💬 Твій коментар: "${caption}"\n`;
+      }
+      
+      successMessage += `\nТак тримати! 💪`;
       
       await sendTelegramMessage(chatId, successMessage);
     } else {
@@ -326,7 +388,7 @@ async function handleRegularMessage(msg) {
 }
 
 // Функція для збереження відвідування в Google Sheets
-async function saveAttendance(userId, userName, firstName, date) {
+async function saveAttendance(userId, userName, firstName, date, caption = '', photoUrl = '') {
   try {
     if (!sheets) {
       console.error('❌ Google Sheets not initialized');
@@ -344,7 +406,7 @@ async function saveAttendance(userId, userName, firstName, date) {
     try {
       await sheets.spreadsheets.values.get({
         spreadsheetId: GOOGLE_SHEETS_ID,
-        range: `${sheetName}!A1:Z1000`,
+        range: `${sheetName}!A1:G1000`,
       });
     } catch (error) {
       console.log('📄 Sheet does not exist, will create:', sheetName);
@@ -369,10 +431,10 @@ async function saveAttendance(userId, userName, firstName, date) {
       // Додаємо заголовки
       await sheets.spreadsheets.values.update({
         spreadsheetId: GOOGLE_SHEETS_ID,
-        range: `${sheetName}!A1:E1`,
+        range: `${sheetName}!A1:G1`,
         valueInputOption: 'RAW',
         resource: {
-          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Час']]
+          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Час', 'Текст під фото', 'Посилання на фото']]
         }
       });
     }
@@ -381,10 +443,10 @@ async function saveAttendance(userId, userName, firstName, date) {
     const currentTime = moment().format('HH:mm:ss');
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:E`,
+      range: `${sheetName}!A:G`,
       valueInputOption: 'RAW',
       resource: {
-        values: [[userId, userName, firstName, date, currentTime]]
+        values: [[userId, userName, firstName, date, currentTime, caption || '', photoUrl || '']]
       }
     });
 
@@ -409,7 +471,7 @@ async function checkTodayAttendance(userId) {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:E`,
+      range: `${sheetName}!A:G`,
     });
 
     const rows = response.data.values || [];
@@ -443,7 +505,7 @@ async function getUserStats(userId) {
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:E`,
+      range: `${sheetName}!A:G`,
     });
 
     const rows = response.data.values || [];
@@ -474,7 +536,7 @@ async function getTopUsers() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:E`,
+      range: `${sheetName}!A:G`,
     });
 
     const rows = response.data.values || [];
