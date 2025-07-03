@@ -460,76 +460,7 @@ async function handleRegularMessage(msg) {
   ).catch(error => console.error('❌ Error sending instruction message:', error));
 }
 
-// Функція для форматування колонки G та рядка
-async function formatSheetDimensions(sheetName, rowIndex) {
-  if (!GOOGLE_SHEETS_AVAILABLE) {
-    return;
-  }
 
-  try {
-    // Отримуємо ID листа
-    const spreadsheet = await sheets.spreadsheets.get({
-      spreadsheetId: GOOGLE_SHEETS_ID
-    });
-
-    const sheet = spreadsheet.data.sheets.find(s => s.properties.title === sheetName);
-    if (!sheet) {
-      console.error('❌ Sheet not found for formatting:', sheetName);
-      return;
-    }
-
-    const sheetId = sheet.properties.sheetId;
-    console.log('🎨 Formatting dimensions for sheet ID:', sheetId, 'row:', rowIndex);
-
-    const requests = [];
-
-    // Встановлюємо ширину колонки G (індекс 6) на 550 пікселів
-    requests.push({
-      updateDimensionProperties: {
-        range: {
-          sheetId: sheetId,
-          dimension: 'COLUMNS',
-          startIndex: 6, // Колонка G (0-based)
-          endIndex: 7
-        },
-        properties: {
-          pixelSize: 550
-        },
-        fields: 'pixelSize'
-      }
-    });
-
-    // Встановлюємо висоту рядка на 350 пікселів
-    if (rowIndex > 1) { // Пропускаємо заголовок (рядок 1)
-      requests.push({
-        updateDimensionProperties: {
-          range: {
-            sheetId: sheetId,
-            dimension: 'ROWS',
-            startIndex: rowIndex - 1, // 0-based індекс
-            endIndex: rowIndex
-          },
-          properties: {
-            pixelSize: 350
-          },
-          fields: 'pixelSize'
-        }
-      });
-    }
-
-    if (requests.length > 0) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: GOOGLE_SHEETS_ID,
-        resource: {
-          requests: requests
-        }
-      });
-      console.log('✅ Sheet dimensions formatted successfully');
-    }
-  } catch (error) {
-    console.error('❌ Error formatting sheet dimensions:', error);
-  }
-}
 
 // Функція для збереження відвідування в Google Sheets
 async function saveAttendance(userId, userName, firstName, date, caption = '', photoUrl = '') {
@@ -550,7 +481,7 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
     try {
       await sheets.spreadsheets.values.get({
         spreadsheetId: GOOGLE_SHEETS_ID,
-        range: `${sheetName}!A1:G1000`,
+        range: `${sheetName}!A1:F1000`,
       });
     } catch (error) {
       console.log('📄 Sheet does not exist, will create:', sheetName);
@@ -578,18 +509,14 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
         range: `${sheetName}!A1:G1`,
         valueInputOption: 'RAW',
         resource: {
-          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Час', 'Текст під фото', 'Фото']]
+          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Текст під фото', 'Фото']]
         }
       });
 
-      // Форматуємо колонку G при створенні нового листа
-      await formatSheetDimensions(sheetName, 1);
-      console.log('🎨 Formatted new sheet dimensions:', sheetName);
+
     }
 
     // Додаємо новий запис
-    const currentTime = moment().format('HH:mm:ss');
-    
     // Якщо є фото, використовуємо IMAGE() функцію для вставки зображення
     let photoFormula = '';
     if (photoUrl) {
@@ -599,25 +526,23 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
       valueInputOption: 'USER_ENTERED', // Дозволяє використовувати формули
       resource: {
-        values: [[userId, userName, firstName, date, currentTime, caption || '', photoFormula]]
+        values: [[userId, userName, firstName, date, caption || '', photoFormula]]
       }
     });
 
     // ПІСЛЯ вставки даних отримуємо актуальну кількість рядків
     const updatedData = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`
+      range: `${sheetName}!A:F`
     });
     
     const actualRowCount = updatedData.data.values ? updatedData.data.values.length : 0;
     console.log('📊 Actual row count after insert:', actualRowCount);
     
-    // Форматуємо розміри колонки та останнього рядка (де щойно вставили дані)
-    await formatSheetDimensions(sheetName, actualRowCount);
-    console.log('🎨 Applied formatting for actual row:', actualRowCount);
+
 
     return true;
   } catch (error) {
@@ -640,7 +565,7 @@ async function checkTodayAttendance(userId) {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
@@ -674,7 +599,7 @@ async function getUserStats(userId) {
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
@@ -705,7 +630,7 @@ async function getTopUsers() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
