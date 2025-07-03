@@ -198,6 +198,42 @@
             animation: messageAppear 0.3s ease-out;
         }
 
+        .message-photo {
+            max-width: 300px;
+            max-height: 300px;
+            width: auto;
+            height: auto;
+            border-radius: 12px;
+            margin-top: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            object-fit: cover;
+        }
+
+        .message-photo:hover {
+            transform: scale(1.02);
+        }
+
+        .photo-loading {
+            background: #f0f0f0;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        .photo-error {
+            background: #ffebee;
+            border: 1px solid #ffcdd2;
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            color: #c62828;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .chat-container {
@@ -208,6 +244,21 @@
             
             .message {
                 max-width: 85%;
+            }
+            
+            .message-photo {
+                max-width: 250px;
+                max-height: 250px;
+            }
+            
+            .quick-replies {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .quick-reply-btn {
+                font-size: 12px;
+                padding: 8px 12px;
             }
         }
     </style>
@@ -446,12 +497,27 @@
                 messageDiv.setAttribute('data-message-id', message.id);
             }
             
-            messageDiv.innerHTML = `
+            // Базова структура повідомлення
+            let messageContent = `
                 <div class="message-info">${message.user} • ${message.time}</div>
                 <div class="message-text">${message.text}</div>
             `;
             
+            // Додаємо фото якщо є
+            if (message.photo) {
+                messageContent += `
+                    <div class="photo-loading">📸 Завантаження фото...</div>
+                `;
+            }
+            
+            messageDiv.innerHTML = messageContent;
             messagesContainer.appendChild(messageDiv);
+            
+            // Завантажуємо фото асинхронно
+            if (message.photo) {
+                loadMessagePhoto(messageDiv, message.photo, message.user);
+            }
+            
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
             
             // Звуковий сигнал для нових повідомлень (опціонально)
@@ -459,6 +525,75 @@
                 // Можна додати звуковий сигнал тут
                 console.log('🔔 Нове повідомлення від', message.user);
             }
+        }
+        
+        // Завантаження фото для повідомлення
+        function loadMessagePhoto(messageDiv, photoUrl, userName) {
+            const loadingDiv = messageDiv.querySelector('.photo-loading');
+            
+            if (!photoUrl || !loadingDiv) {
+                if (loadingDiv) {
+                    loadingDiv.innerHTML = '<div class="photo-error">❌ Фото недоступне</div>';
+                }
+                return;
+            }
+            
+            const img = new Image();
+            
+            img.onload = function() {
+                const photoContainer = document.createElement('div');
+                photoContainer.innerHTML = `
+                    <img src="${photoUrl}" 
+                         alt="Фото від ${userName}" 
+                         class="message-photo"
+                         onclick="openPhotoModal('${photoUrl}', '${userName}')" />
+                `;
+                loadingDiv.parentNode.replaceChild(photoContainer, loadingDiv);
+                
+                // Прокручуємо вниз після завантаження фото
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            };
+            
+            img.onerror = function() {
+                loadingDiv.innerHTML = '<div class="photo-error">❌ Помилка завантаження фото</div>';
+            };
+            
+            img.src = photoUrl;
+        }
+        
+        // Відкриття фото в модальному вікні
+        function openPhotoModal(photoUrl, userName) {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 10000;
+                cursor: pointer;
+            `;
+            
+            modal.innerHTML = `
+                <div style="max-width: 90%; max-height: 90%; text-align: center;">
+                    <img src="${photoUrl}" 
+                         alt="Фото від ${userName}" 
+                         style="max-width: 100%; max-height: 100%; border-radius: 8px;" />
+                    <div style="color: white; margin-top: 10px; font-size: 14px;">
+                        📸 Фото від ${userName} • Клікніть щоб закрити
+                    </div>
+                </div>
+            `;
+            
+            modal.onclick = function() {
+                document.body.removeChild(modal);
+            };
+            
+            document.body.appendChild(modal);
         }
         
         // Завантаження останніх повідомлень

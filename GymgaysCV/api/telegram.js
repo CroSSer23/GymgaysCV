@@ -547,6 +547,14 @@ async function handlePrivatePhoto(msg) {
 
       req.write(postData, 'utf8');
       req.end();
+      
+      // Додаємо повідомлення про пересилання фото в веб-інтерфейс
+      addMessageToTemp({
+        user: 'Бот',
+        text: `🤦‍♂️ Переслав фото від ${userName} в групу (було надіслано в лічку)`,
+        type: 'bot',
+        photo: photoUrl
+      });
     }
   } catch (error) {
     console.error('❌ Помилка при обробці фото в лічці:', error);
@@ -795,7 +803,8 @@ function addMessageToTemp(message) {
     text: message.text,
     time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'}),
     type: message.type || 'incoming',
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    photo: message.photo || null // Додаємо підтримку фото
   };
   
   global.tempMessages.unshift(messageObj);
@@ -805,7 +814,8 @@ function addMessageToTemp(message) {
     global.tempMessages = global.tempMessages.slice(0, 20);
   }
   
-  console.log(`📨 Додано в temp сховище: ${messageObj.user} - "${messageObj.text}"`);
+  const displayText = message.photo ? `📸 [ФОТО] ${message.text}` : message.text;
+  console.log(`📨 Додано в temp сховище: ${messageObj.user} - "${displayText}"`);
   console.log(`📊 Всього повідомлень в сховищі: ${global.tempMessages.length}`);
 }
 
@@ -842,15 +852,31 @@ module.exports = async (req, res) => {
           });
         } else if (msg.photo) {
           const caption = msg.caption || '';
-          const displayText = `[ФОТО]${caption ? ' ' + caption : ''}`;
-          console.log(`👤 ${userName}: ${displayText}`);
+          const displayText = `${caption || 'Фото з тренування'}`;
+          console.log(`👤 ${userName}: 📸 [ФОТО] ${displayText}`);
           
-          // Додаємо в тимчасове сховище для веб-інтерфейсу
-          addMessageToTemp({
-            user: userName,
-            text: displayText,
-            type: 'incoming'
-          });
+          // Отримуємо URL фото для веб-інтерфейсу
+          try {
+            const photos = msg.photo;
+            const largestPhoto = photos[photos.length - 1];
+            const photoUrl = await getTelegramPhotoUrl(largestPhoto.file_id);
+            
+            // Додаємо в тимчасове сховище для веб-інтерфейсу з URL фото
+            addMessageToTemp({
+              user: userName,
+              text: displayText,
+              type: 'incoming',
+              photo: photoUrl
+            });
+          } catch (error) {
+            console.error('❌ Помилка отримання URL фото:', error);
+            // Зберігаємо без фото якщо помилка
+            addMessageToTemp({
+              user: userName,
+              text: `[ФОТО] ${displayText}`,
+              type: 'incoming'
+            });
+          }
         }
       }
       
