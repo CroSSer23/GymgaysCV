@@ -854,10 +854,6 @@ module.exports = async (req, res) => {
     if (req.url && req.url.includes('messages')) {
       const messages = global.tempMessages.slice(0, 20);
       
-      if (messages.length > 0) {
-        console.log(`📤 Відправляємо ${messages.length} повідомлень до веб-інтерфейсу`);
-      }
-      
       res.status(200).json({
         ok: true,
         messages: messages,
