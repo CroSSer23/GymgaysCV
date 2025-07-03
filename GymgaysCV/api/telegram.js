@@ -111,6 +111,33 @@ function getCurrentMonth() {
   return moment().format('MM.YYYY');
 }
 
+// Функції для роботи з тижнями
+function getWeekStart() {
+  return moment().startOf('isoWeek'); // Понеділок як початок тижня
+}
+
+function getWeekEnd() {
+  return moment().endOf('isoWeek'); // Неділя як кінець тижня
+}
+
+function getCurrentWeekRange() {
+  const start = getWeekStart();
+  const end = getWeekEnd();
+  return {
+    start: start.format('DD.MM.YYYY'),
+    end: end.format('DD.MM.YYYY'),
+    startMoment: start,
+    endMoment: end
+  };
+}
+
+function isDateInCurrentWeek(dateString) {
+  const date = moment(dateString, 'DD.MM.YYYY');
+  const weekStart = getWeekStart();
+  const weekEnd = getWeekEnd();
+  return date.isBetween(weekStart, weekEnd, 'day', '[]');
+}
+
 // Функція для отримання рандомної саркастичної фрази
 function getRandomPhrase() {
   try {
@@ -234,8 +261,8 @@ async function handleCommand(msg) {
 • "#gym спина і біцепс готові!"
 
 📋 Команди:
-/stats - твоя статистика за поточний місяць
-/top - рейтинг найактивніших учасників
+/stats - твоя статистика за поточний тиждень
+/top - рейтинг найактивніших учасників за тиждень
 /rules - правила групи та штрафів
 /help - ця довідка
 
@@ -255,18 +282,18 @@ async function handleCommand(msg) {
       const firstName = msg.from.first_name;
       
       try {
-        const userAttendance = await getUserStats(userId);
-        const currentMonth = moment().format('MMMM YYYY');
+        const userWeeklyAttendance = await getUserStats(userId);
+        const weekRange = getCurrentWeekRange();
         
-        const statsMessage = `📊 Твоя статистика за ${currentMonth}:
+        const statsMessage = `📊 Твоя статистика за тиждень (${weekRange.start} - ${weekRange.end}):
 
-🏋️‍♂️ Відвідувань: ${userAttendance}
+🏋️‍♂️ Відвідувань: ${userWeeklyAttendance}
 👤 ${firstName}
 
-${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній чемпіон!' :
-  userAttendance >= 15 ? '💪 Відмінно! Так тримати!' :
-  userAttendance >= 10 ? '👍 Добре! Можеш ще краще!' :
-  userAttendance >= 5 ? '😊 Непогано, але є куди рости!' :
+${userWeeklyAttendance >= 7 ? '🔥 Неймовірно! Кожен день у залі - ти справжній чемпіон!' :
+  userWeeklyAttendance >= 5 ? '💪 Відмінно! Так тримати!' :
+  userWeeklyAttendance >= 3 ? '👍 Добре! Можеш ще краще!' :
+  userWeeklyAttendance >= 1 ? '😊 Непогано, але є куди рости!' :
   '😅 Час активніше братися за тренування!'}`;
         
         await sendTelegramMessage(chatId, statsMessage);
@@ -311,14 +338,14 @@ ${userAttendance >= 20 ? '🔥 Неймовірно! Ти справжній ч�
       
       try {
         const topUsers = await getTopUsers();
-        const currentMonth = moment().format('MMMM YYYY');
+        const weekRange = getCurrentWeekRange();
         
         if (topUsers.length === 0) {
-          await sendTelegramMessage(chatId, '📊 Поки немає даних про відвідування цього місяця.');
+          await sendTelegramMessage(chatId, `📊 Поки немає даних про відвідування цього тижня (${weekRange.start} - ${weekRange.end}).`);
           return;
         }
         
-        let topMessage = `🏆 Топ відвідувачів за ${currentMonth}:\n\n`;
+        let topMessage = `🏆 Топ відвідувачів за тиждень (${weekRange.start} - ${weekRange.end}):\n\n`;
         
         topUsers.forEach((user, index) => {
           const medal = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '🏅';
@@ -448,7 +475,7 @@ async function handlePhoto(msg) {
       
       const successMessage = `${randomPhrase}\n\n` +
         `📅 Дата: ${today}\n` +
-        `🏋️‍♂️ Відвідувань цього місяця: ${userStats}`;
+        `🏋️‍♂️ Відвідувань цього тижня: ${userStats}`;
       
       await sendTelegramMessage(chatId, successMessage);
     } else {
@@ -604,7 +631,7 @@ async function checkTodayAttendance(userId) {
   }
 }
 
-// Функція для отримання статистики користувача
+// Функція для отримання статистики користувача за поточний тиждень
 async function getUserStats(userId) {
   try {
     if (!sheets) {
@@ -615,7 +642,7 @@ async function getUserStats(userId) {
     const monthYear = getCurrentMonth();
     const sheetName = `Відвідуваність_${monthYear}`;
 
-    console.log('📊 Getting user stats for sheet:', sheetName);
+    console.log('📊 Getting user weekly stats for sheet:', sheetName);
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
@@ -623,26 +650,30 @@ async function getUserStats(userId) {
     });
 
     const rows = response.data.values || [];
-    let userAttendance = 0;
+    let userWeeklyAttendance = 0;
     
     console.log('📊 Found rows:', rows.length);
     
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      if (row[0] == userId) {
-        userAttendance++;
+      const rowUserId = row[0];
+      const rowDate = row[1]; // Дата у форматі DD.MM.YYYY
+      
+      // Перевіряємо чи це наш користувач і чи дата входить у поточний тиждень
+      if (rowUserId == userId && isDateInCurrentWeek(rowDate)) {
+        userWeeklyAttendance++;
       }
     }
     
-    console.log('📊 User attendance count:', userAttendance);
-    return userAttendance;
+    console.log('📊 User weekly attendance count:', userWeeklyAttendance);
+    return userWeeklyAttendance;
   } catch (error) {
-    console.error('❌ Помилка при отриманні статистики:', error);
+    console.error('❌ Помилка при отриманні тижневої статистики:', error);
     throw error; // Пробрасываем ошибку чтобы ее обработал вызывающий код
   }
 }
 
-// Функція для отримання топ користувачів
+// Функція для отримання топ користувачів за поточний тиждень
 async function getTopUsers() {
   try {
     const monthYear = getCurrentMonth();
@@ -654,31 +685,35 @@ async function getTopUsers() {
     });
 
     const rows = response.data.values || [];
-    const userStats = {};
+    const userWeeklyStats = {};
     
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const userId = row[0];
-      const userName = row[2] || row[1];
+      const rowDate = row[1]; // Дата у форматі DD.MM.YYYY
+      const userName = row[2] || 'Невідомо';
       
-      if (!userStats[userId]) {
-        userStats[userId] = {
-          name: userName,
-          count: 0
-        };
+      // Фільтруємо тільки записи за поточний тиждень
+      if (isDateInCurrentWeek(rowDate)) {
+        if (!userWeeklyStats[userId]) {
+          userWeeklyStats[userId] = {
+            name: userName,
+            count: 0
+          };
+        }
+        userWeeklyStats[userId].count++;
       }
-      userStats[userId].count++;
     }
     
-    // Сортуємо за кількістю відвідувань
-    const sortedUsers = Object.entries(userStats)
+    // Сортуємо за кількістю відвідувань за тиждень
+    const sortedUsers = Object.entries(userWeeklyStats)
       .map(([userId, data]) => ({ userId, ...data }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
     
     return sortedUsers;
   } catch (error) {
-    console.error('Помилка при отриманні топ користувачів:', error);
+    console.error('Помилка при отриманні топ користувачів за тиждень:', error);
     return [];
   }
 }
