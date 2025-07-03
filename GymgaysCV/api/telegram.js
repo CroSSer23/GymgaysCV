@@ -842,6 +842,40 @@ module.exports = async (req, res) => {
         res.status(500).json({ error: 'Internal server error', details: error.message });
       }
     }
+  } else if (req.method === 'GET') {
+    clearTimeout(timeoutId);
+    
+    // Встановлюємо CORS заголовки для веб-інтерфейсу
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    
+    // Якщо це запит повідомлень для веб-інтерфейсу
+    if (req.url && req.url.includes('messages')) {
+      const messages = global.tempMessages.slice(0, 20);
+      
+      if (messages.length > 0) {
+        console.log(`📤 Відправляємо ${messages.length} повідомлень до веб-інтерфейсу`);
+      }
+      
+      res.status(200).json({
+        ok: true,
+        messages: messages,
+        timestamp: Date.now()
+      });
+    } else {
+      // Health check
+      res.status(200).json({ 
+        message: 'Gym Attendance Bot is running!',
+        timestamp: new Date().toISOString(),
+        env_check: {
+          bot_token: !!BOT_TOKEN,
+          sheets_id: !!GOOGLE_SHEETS_ID,
+          service_email: !!GOOGLE_SERVICE_ACCOUNT_EMAIL,
+          private_key: !!GOOGLE_PRIVATE_KEY
+        }
+      });
+    }
   } else {
     clearTimeout(timeoutId);
     // Health check

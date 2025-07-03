@@ -464,7 +464,7 @@
         // Завантаження останніх повідомлень
         async function loadRecentMessages() {
             try {
-                const response = await fetch(`${API_BASE}/api/get-messages`);
+                const response = await fetch(`${API_BASE}/api/telegram?messages=true`);
                 const data = await response.json();
                 
                 // Debug лог тільки якщо є повідомлення
@@ -508,7 +508,7 @@
             if (!isConnected) return;
             
             try {
-                const response = await fetch(`${API_BASE}/api/get-messages`);
+                const response = await fetch(`${API_BASE}/api/telegram?messages=true`);
                 const data = await response.json();
                 
                 if (data.ok && data.messages) {
