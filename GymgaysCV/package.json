@@ -7,7 +7,7 @@
     "dev": "node dev-server.js",
     "vercel-dev": "vercel dev",
     "start": "node api/telegram.js",
-    "build": "echo 'No build step required for static files'",
+    "build": "echo 'Static files are ready for deployment' && ls -la",
     "test": "node test.js"
   },
   "dependencies": {
