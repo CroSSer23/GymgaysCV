@@ -123,6 +123,11 @@ function getWeekEnd() {
 function getCurrentWeekRange() {
   const start = getWeekStart();
   const end = getWeekEnd();
+  
+  console.log('📅 Current week range:');
+  console.log('   Start:', start.format('DD.MM.YYYY dddd'));
+  console.log('   End:', end.format('DD.MM.YYYY dddd'));
+  
   return {
     start: start.format('DD.MM.YYYY'),
     end: end.format('DD.MM.YYYY'),
@@ -135,13 +140,22 @@ function isDateInCurrentWeek(dateString) {
   const date = moment(dateString, 'DD.MM.YYYY');
   const weekStart = getWeekStart();
   const weekEnd = getWeekEnd();
-  return date.isBetween(weekStart, weekEnd, 'day', '[]');
+  
+  console.log('🗓️ Checking date in current week:');
+  console.log('   Date to check:', dateString, '→', date.format('DD.MM.YYYY dddd'));
+  console.log('   Week start:', weekStart.format('DD.MM.YYYY dddd'));
+  console.log('   Week end:', weekEnd.format('DD.MM.YYYY dddd'));
+  
+  const isInWeek = date.isBetween(weekStart, weekEnd, 'day', '[]');
+  console.log('   Is in current week:', isInWeek);
+  
+  return isInWeek;
 }
 
 // Функція для отримання рандомної саркастичної фрази
 function getRandomPhrase() {
   try {
-    const phrasesPath = path.join(__dirname, 'phrases.json');
+    const phrasesPath = path.join(__dirname, '..', 'phrases.json');
     const phrasesData = fs.readFileSync(phrasesPath, 'utf8');
     const phrases = JSON.parse(phrasesData);
     
@@ -654,14 +668,19 @@ async function getUserStats(userId) {
     
     console.log('📊 Found rows:', rows.length);
     
+    console.log('📊 Checking rows for user:', userId);
+    
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const rowUserId = row[0];
-      const rowDate = row[1]; // Дата у форматі DD.MM.YYYY
+      const rowDate = row[3]; // Дата у форматі DD.MM.YYYY (колонка D)
+      
+      console.log(`   Row ${i}: userId=${rowUserId}, date=${rowDate}, matches=${rowUserId == userId}`);
       
       // Перевіряємо чи це наш користувач і чи дата входить у поточний тиждень
       if (rowUserId == userId && isDateInCurrentWeek(rowDate)) {
         userWeeklyAttendance++;
+        console.log('   ✅ This row counts for weekly stats!');
       }
     }
     
@@ -690,7 +709,7 @@ async function getTopUsers() {
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
       const userId = row[0];
-      const rowDate = row[1]; // Дата у форматі DD.MM.YYYY
+      const rowDate = row[3]; // Дата у форматі DD.MM.YYYY (колонка D)
       const userName = row[2] || 'Невідомо';
       
       // Фільтруємо тільки записи за поточний тиждень
@@ -735,6 +754,29 @@ module.exports = async (req, res) => {
   if (req.method === 'POST') {
     try {
       console.log('📥 Update received:', JSON.stringify(req.body, null, 2));
+      
+      // Додаємо відформатований лог для легшого читання
+      if (req.body.message) {
+        const msg = req.body.message;
+        console.log('📋 === FORMATTED MESSAGE INFO ===');
+        console.log(`👤 From: ${msg.from.first_name} ${msg.from.last_name || ''} (@${msg.from.username || 'no_username'}) [ID: ${msg.from.id}]`);
+        console.log(`💬 Chat: "${msg.chat.title || 'Private'}" [ID: ${msg.chat.id}, Type: ${msg.chat.type}]`);
+        console.log(`🕐 Date: ${new Date(msg.date * 1000).toLocaleString('uk-UA')}`);
+        
+        if (msg.text) {
+          console.log(`📝 Text: "${msg.text}"`);
+        }
+        
+        if (msg.photo) {
+          console.log(`📸 Photo: ${msg.photo.length} sizes, largest: ${msg.photo[msg.photo.length - 1].width}x${msg.photo[msg.photo.length - 1].height}`);
+          if (msg.caption) {
+            console.log(`📝 Caption: "${msg.caption}"`);
+          }
+        }
+        
+        console.log('=================================');
+      }
+      
       console.log('🔑 BOT_TOKEN exists:', !!BOT_TOKEN);
       console.log('📋 GOOGLE_SHEETS_ID:', !!GOOGLE_SHEETS_ID);
       console.log('📧 SERVICE_ACCOUNT_EMAIL:', !!GOOGLE_SERVICE_ACCOUNT_EMAIL);
