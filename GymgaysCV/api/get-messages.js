@@ -1,5 +1,13 @@
-// Простой endpoint для получения информации о последних сообщениях
-// В реальном проекте здесь был бы доступ к базе данных или кэшу
+// Підключаємо сховище повідомлень
+let messagesStore;
+try {
+  messagesStore = require('./messages-store');
+} catch (e) {
+  // Якщо модуль не доступний, повертаємо пусті дані
+  messagesStore = {
+    getRecentMessages: () => []
+  };
+}
 
 // Vercel функция
 module.exports = async (req, res) => {
@@ -20,22 +28,12 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Симуляція отримання останніх повідомлень
-    // В реальному проекті тут був би запит до бази даних або API Telegram
-    
-    const mockMessages = [
-      {
-        id: Date.now(),
-        user: 'Олександр',
-        text: 'Привіт всім! Хто йде сьогодні в зал?',
-        time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'}),
-        type: 'incoming'
-      }
-    ];
+    // Отримуємо реальні повідомлення з сховища
+    const messages = messagesStore.getRecentMessages(20);
     
     res.status(200).json({
       ok: true,
-      messages: mockMessages,
+      messages: messages,
       timestamp: Date.now()
     });
 

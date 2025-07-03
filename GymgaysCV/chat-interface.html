@@ -87,6 +87,8 @@
         .message-text {
             font-size: 14px;
             line-height: 1.4;
+            white-space: pre-wrap;
+            word-wrap: break-word;
         }
 
         .chat-input-area {
@@ -131,9 +133,10 @@
             font-size: 14px;
             resize: none;
             min-height: 44px;
-            max-height: 120px;
+            max-height: 200px;
             outline: none;
             font-family: inherit;
+            line-height: 1.4;
         }
 
         .message-input:focus {
@@ -230,6 +233,7 @@
                 <button class="quick-reply-btn" onclick="sendQuickMessage('📋 /rules')">📋 Правила</button>
                 <button class="quick-reply-btn" onclick="sendQuickMessage('💪 Давайте качатись!')">💪 Мотивація</button>
                 <button class="quick-reply-btn" onclick="sendReplies()">🔥 Відправити репліки</button>
+                <button class="quick-reply-btn" onclick="sendBossMessage()">👑 Повернення Бога</button>
             </div>
             
             <div class="input-container">
@@ -367,6 +371,26 @@
             sendMessage();
         }
         
+        // Відправка спеціального повідомлення "Повернення Бога"
+        function sendBossMessage() {
+            const bossMessage = `🏋️‍♂️ Повернувся з залу — весь мокрий, злий і на пампінгу.
+А тут щось фраєрки затихли… 🤨
+
+Що сталося, грізні клавіатурні хижаки?
+Поки я шмалив підходи, ви що — в розтяжку пішли? 😂
+
+Давайте, не стисняйтесь. Бот ще теплий, як моя шия після станової.
+
+#Повернення_бога_залу
+#Де_фраєри
+#Хто_скаже_піпець_тепер`;
+            
+            messageInput.value = bossMessage;
+            // Автоматично розширюємо поле для багаторядкового тексту
+            messageInput.style.height = 'auto';
+            messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + 'px';
+        }
+        
         // Відправка заготовлених реплік
         async function sendReplies() {
             try {
@@ -467,7 +491,7 @@
         }
         
         // Періодичне оновлення повідомлень
-        let lastMessageTimestamp = 0;
+        let lastMessageCount = 0;
         async function checkForNewMessages() {
             if (!isConnected) return;
             
@@ -475,25 +499,29 @@
                 const response = await fetch(`${API_BASE}/api/get-messages`);
                 const data = await response.json();
                 
-                if (data.ok && data.messages && data.timestamp > lastMessageTimestamp) {
-                    // Фільтруємо тільки нові повідомлення
-                    const newMessages = data.messages.filter(msg => 
-                        !document.querySelector(`[data-message-id="${msg.id}"]`)
-                    );
+                if (data.ok && data.messages) {
+                    // Перевіряємо чи є нові повідомлення
+                    if (data.messages.length > lastMessageCount) {
+                        // Додаємо тільки нові повідомлення
+                        const newMessages = data.messages.slice(0, data.messages.length - lastMessageCount);
+                        
+                        newMessages.forEach(message => {
+                            // Перевіряємо чи повідомлення вже не додано
+                            if (!document.querySelector(`[data-message-id="${message.id}"]`)) {
+                                addMessage(message, true); // true означає нове повідомлення
+                            }
+                        });
+                    }
                     
-                    newMessages.forEach(message => {
-                        addMessage(message, true); // true означає нове повідомлення
-                    });
-                    
-                    lastMessageTimestamp = data.timestamp;
+                    lastMessageCount = data.messages.length;
                 }
             } catch (error) {
                 console.error('Помилка перевірки нових повідомлень:', error);
             }
         }
         
-        // Перевірка нових повідомлень кожні 10 секунд
-        setInterval(checkForNewMessages, 10000);
+        // Перевірка нових повідомлень кожні 3 секунди
+        setInterval(checkForNewMessages, 3000);
     </script>
 </body>
 </html>

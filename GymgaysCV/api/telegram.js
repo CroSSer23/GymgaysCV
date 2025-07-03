@@ -708,6 +708,19 @@ async function getTopUsers() {
 
 // Старі обробники видалені - тепер використовуємо handleCommand, handlePhoto, handleRegularMessage
 
+// Підключаємо сховище повідомлень для веб-інтерфейсу
+let messagesStore;
+try {
+  messagesStore = require('./messages-store');
+} catch (e) {
+  // Якщо модуль не доступний, створюємо заглушку
+  messagesStore = {
+    addMessage: () => {},
+    getRecentMessages: () => [],
+    cleanOldMessages: () => {}
+  };
+}
+
 // Webhook обробник для Vercel
 module.exports = async (req, res) => {
   console.log('📨 Received request:', req.method);
@@ -722,16 +735,31 @@ module.exports = async (req, res) => {
   
   if (req.method === 'POST') {
     try {
-      // Простий лог повідомлення
+      // Простий лог повідомлення та додавання в сховище для веб-інтерфейсу
       if (req.body.message) {
         const msg = req.body.message;
         const userName = `${msg.from.first_name}${msg.from.last_name ? ' ' + msg.from.last_name : ''}`;
         
         if (msg.text) {
           console.log(`👤 ${userName}: "${msg.text}"`);
+          
+          // Додаємо в сховище для веб-інтерфейсу
+          messagesStore.addMessage({
+            user: userName,
+            text: msg.text,
+            type: 'incoming'
+          });
         } else if (msg.photo) {
           const caption = msg.caption || '';
-          console.log(`👤 ${userName}: [ФОТО]${caption ? ' "' + caption + '"' : ''}`);
+          const displayText = `[ФОТО]${caption ? ' ' + caption : ''}`;
+          console.log(`👤 ${userName}: ${displayText}`);
+          
+          // Додаємо в сховище для веб-інтерфейсу
+          messagesStore.addMessage({
+            user: userName,
+            text: displayText,
+            type: 'incoming'
+          });
         }
       }
       
