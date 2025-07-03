@@ -466,24 +466,32 @@
                 const response = await fetch(`${API_BASE}/api/get-messages`);
                 const data = await response.json();
                 
-                if (data.ok && data.messages) {
-                    data.messages.forEach(message => {
+                console.log('📥 Отримані дані:', data); // Debug лог
+                
+                if (data.ok && data.messages && data.messages.length > 0) {
+                    console.log(`📨 Завантажено ${data.messages.length} повідомлень`);
+                    data.messages.reverse().forEach(message => { // Reverse для правильного порядку
                         addMessage(message);
+                    });
+                } else {
+                    console.log('📭 Повідомлень не знайдено');
+                    // Показуємо початкове повідомлення тільки якщо немає реальних
+                    addMessage({
+                        text: 'Чат готовий до роботи! Очікуємо повідомлення з групи... 💪',
+                        type: 'incoming',
+                        user: 'Система',
+                        time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'})
                     });
                 }
             } catch (error) {
                 console.error('Помилка завантаження повідомлень:', error);
-            }
-            
-            // Показуємо початкове повідомлення
-            setTimeout(() => {
                 addMessage({
-                    text: 'Привіт! Готовий до спілкування з групою! 💪',
+                    text: '❌ Помилка підключення до сервера',
                     type: 'incoming',
                     user: 'Система',
                     time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'})
                 });
-            }, 1000);
+            }
         }
         
         // Періодичне оновлення повідомлень

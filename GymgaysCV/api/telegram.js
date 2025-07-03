@@ -708,17 +708,29 @@ async function getTopUsers() {
 
 // Старі обробники видалені - тепер використовуємо handleCommand, handlePhoto, handleRegularMessage
 
-// Підключаємо сховище повідомлень для веб-інтерфейсу
-let messagesStore;
-try {
-  messagesStore = require('./messages-store');
-} catch (e) {
-  // Якщо модуль не доступний, створюємо заглушку
-  messagesStore = {
-    addMessage: () => {},
-    getRecentMessages: () => [],
-    cleanOldMessages: () => {}
+// Використовуємо глобальну змінну для збереження повідомлень
+global.tempMessages = global.tempMessages || [];
+
+// Функція для додавання повідомлення в тимчасове сховище
+function addMessageToTemp(message) {
+  const messageObj = {
+    id: Date.now() + Math.random(),
+    user: message.user,
+    text: message.text,
+    time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'}),
+    type: message.type || 'incoming',
+    timestamp: Date.now()
   };
+  
+  global.tempMessages.unshift(messageObj);
+  
+  // Обмежуємо до 20 повідомлень
+  if (global.tempMessages.length > 20) {
+    global.tempMessages = global.tempMessages.slice(0, 20);
+  }
+  
+  console.log(`📨 Додано в temp сховище: ${messageObj.user} - "${messageObj.text}"`);
+  console.log(`📊 Всього повідомлень в сховищі: ${global.tempMessages.length}`);
 }
 
 // Webhook обробник для Vercel
@@ -743,8 +755,8 @@ module.exports = async (req, res) => {
         if (msg.text) {
           console.log(`👤 ${userName}: "${msg.text}"`);
           
-          // Додаємо в сховище для веб-інтерфейсу
-          messagesStore.addMessage({
+          // Додаємо в тимчасове сховище для веб-інтерфейсу
+          addMessageToTemp({
             user: userName,
             text: msg.text,
             type: 'incoming'
@@ -754,8 +766,8 @@ module.exports = async (req, res) => {
           const displayText = `[ФОТО]${caption ? ' ' + caption : ''}`;
           console.log(`👤 ${userName}: ${displayText}`);
           
-          // Додаємо в сховище для веб-інтерфейсу
-          messagesStore.addMessage({
+          // Додаємо в тимчасове сховище для веб-інтерфейсу
+          addMessageToTemp({
             user: userName,
             text: displayText,
             type: 'incoming'

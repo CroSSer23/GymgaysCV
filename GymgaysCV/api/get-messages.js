@@ -1,12 +1,31 @@
-// Підключаємо сховище повідомлень
-let messagesStore;
-try {
-  messagesStore = require('./messages-store');
-} catch (e) {
-  // Якщо модуль не доступний, повертаємо пусті дані
-  messagesStore = {
-    getRecentMessages: () => []
+// Тимчасове рішення: використовуємо глобальну змінну в рамках виконання функції
+global.tempMessages = global.tempMessages || [];
+
+// Функція для отримання останніх повідомлень
+function getRecentMessages(limit = 20) {
+  return global.tempMessages.slice(0, limit);
+}
+
+// Функція для додавання повідомлення (буде викликатися з telegram.js)
+function addTempMessage(message) {
+  const messageObj = {
+    id: Date.now() + Math.random(),
+    user: message.user,
+    text: message.text,
+    time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'}),
+    type: message.type || 'incoming',
+    timestamp: Date.now()
   };
+  
+  global.tempMessages.unshift(messageObj);
+  
+  // Обмежуємо до 20 повідомлень
+  if (global.tempMessages.length > 20) {
+    global.tempMessages = global.tempMessages.slice(0, 20);
+  }
+  
+  console.log(`📨 Додано в temp: ${messageObj.user} - "${messageObj.text}"`);
+  return messageObj;
 }
 
 // Vercel функция
@@ -28,8 +47,10 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Отримуємо реальні повідомлення з сховища
-    const messages = messagesStore.getRecentMessages(20);
+    // Отримуємо повідомлення з глобальної змінної
+    const messages = getRecentMessages(20);
+    
+    console.log(`📤 Відправляємо ${messages.length} повідомлень до веб-інтерфейсу`);
     
     res.status(200).json({
       ok: true,
@@ -44,4 +65,7 @@ module.exports = async (req, res) => {
       error: 'Помилка при отриманні повідомлень' 
     });
   }
-}; 
+};
+
+// Експортуємо функцію для тестування
+module.exports.addTempMessage = addTempMessage; 
