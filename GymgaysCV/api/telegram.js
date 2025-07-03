@@ -477,6 +477,82 @@ function isGroupChat(msg) {
   return msg.chat.type === 'group' || msg.chat.type === 'supergroup';
 }
 
+// ID групового чату
+const GROUP_CHAT_ID = '-1001825402015';
+
+// Грубі відповіді для фото в лічці
+const RUDE_RESPONSES = [
+  "🤬 Ти що, дебіл?! Фото треба кидати в ГРУПУ з хештегом #gym, а не мені в лічку!",
+  "😡 Йой, який розумник! Я тобі шо, приватна галерея? Кидай фото в ГРУПУ!",
+  "🤦‍♂️ Блін, ну тупий же! Фото в групу з #gym, а не мені в приват!",
+  "🙄 Серйозно? Я думав ти розумнішй! Фото - в ГРУПУ, хештег #gym!",
+  "😤 Ще один 'геній'! Фото кидають в ГРУПУ, а не боту в лічку!"
+];
+
+// Функція для обробки фото в лічці (грубо відповідає і пересилає в групу)
+async function handlePrivatePhoto(msg) {
+  const userId = msg.from.id;
+  const userName = `${msg.from.first_name}${msg.from.last_name ? ' ' + msg.from.last_name : ''}`;
+  const caption = msg.caption || '';
+  
+  console.log(`📸 Фото в лічці від ${userName} (${userId})`);
+  
+  // Вибираємо рандомну грубу відповідь
+  const rudeResponse = RUDE_RESPONSES[Math.floor(Math.random() * RUDE_RESPONSES.length)];
+  
+  // Відправляємо грубу відповідь користувачу
+  await sendTelegramMessage(msg.chat.id, rudeResponse);
+  
+  // Пересилаємо фото в групу з принизливим коментарем
+  try {
+    const photos = msg.photo;
+    const largestPhoto = photos[photos.length - 1];
+    
+    // Отримуємо URL фото
+    const photoUrl = await getTelegramPhotoUrl(largestPhoto.file_id);
+    
+    if (photoUrl) {
+      // Відправляємо фото в групу через sendPhoto API
+      const https = require('https');
+      const postData = JSON.stringify({
+        chat_id: GROUP_CHAT_ID,
+        photo: photoUrl,
+        caption: `🤦‍♂️ Дивіться що мені тут в лічку кидають!\n\n👤 ${userName} не розуміє як користуватися ботом і кидає фото в приват замість групи...\n\n${caption ? `Підпис: "${caption}"` : ''}\n\n💡 Нагадую: фото треба кидати в ГРУПУ з хештегом #gym!`
+      });
+
+      const options = {
+        hostname: 'api.telegram.org',
+        port: 443,
+        path: `/bot${BOT_TOKEN}/sendPhoto`,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Content-Length': Buffer.byteLength(postData, 'utf8')
+        }
+      };
+
+      const req = https.request(options, (res) => {
+        let responseData = '';
+        res.on('data', (chunk) => {
+          responseData += chunk;
+        });
+        res.on('end', () => {
+          console.log(`📤 Фото переслано в групу від ${userName}`);
+        });
+      });
+
+      req.on('error', (error) => {
+        console.error('❌ Помилка пересилання фото в групу:', error);
+      });
+
+      req.write(postData, 'utf8');
+      req.end();
+    }
+  } catch (error) {
+    console.error('❌ Помилка при обробці фото в лічці:', error);
+  }
+}
+
 async function handleRegularMessage(msg) {
   console.log('💬 Handling regular message:', msg.text);
   
@@ -802,17 +878,20 @@ module.exports = async (req, res) => {
         // Якщо це фото
         else if (msg.photo) {
           
-          // У групах обробляємо тільки фото з #gym
           if (isGroup) {
+            // У групах обробляємо тільки фото з #gym
             const caption = msg.caption || '';
             if (!caption.toLowerCase().includes('#gym')) {
               clearTimeout(timeoutId);
               res.status(200).json({ ok: true, ignored: 'photo without #gym in group' });
               return;
             }
+            // Обробляємо фото в групі звичайним способом
+            await handlePhoto(msg);
+          } else {
+            // У лічці грубо відповідаємо і пересилаємо в групу
+            await handlePrivatePhoto(msg);
           }
-          
-          await handlePhoto(msg);
         }
         // Звичайне повідомлення
         else if (msg.text) {
