@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏋️‍♂️ Gym Bot Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .dashboard {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .logo {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        .title {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 18px;
+            color: #666;
+            margin-bottom: 40px;
+        }
+
+        .cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 30px 20px;
+            border-radius: 15px;
+            text-decoration: none;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .card.secondary {
+            background: linear-gradient(135deg, #4ecdc4, #44a08d);
+        }
+
+        .card.tertiary {
+            background: linear-gradient(135deg, #45b7d1, #96c93d);
+        }
+
+        .card-icon {
+            font-size: 40px;
+            margin-bottom: 15px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .card-description {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .status {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .status-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-left: 10px;
+        }
+
+        .status-indicator.online {
+            background: #4caf50;
+        }
+
+        .status-indicator.offline {
+            background: #f44336;
+        }
+
+        .status-indicator.loading {
+            background: #ff9800;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                padding: 20px;
+            }
+            
+            .title {
+                font-size: 24px;
+            }
+            
+            .subtitle {
+                font-size: 16px;
+            }
+            
+            .cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="logo">🏋️‍♂️</div>
+        <h1 class="title">Gym Bot Dashboard</h1>
+        <p class="subtitle">Панель управління ботом для групи "Качки Чернівці"</p>
+        
+        <div class="cards">
+            <a href="chat-interface.html" class="card">
+                <div class="card-icon">💬</div>
+                <div class="card-title">Чат Інтерфейс</div>
+                <div class="card-description">Відправляй повідомлення та слідкуй за чатом у реальному часі</div>
+            </a>
+            
+            <a href="webhook-setup.html" class="card secondary">
+                <div class="card-icon">🔗</div>
+                <div class="card-title">Налаштування Webhook</div>
+                <div class="card-description">Конфігурація webhook для отримання повідомлень</div>
+            </a>
+            
+            <div class="card tertiary" onclick="window.open('https://t.me/GymAttendanceBot', '_blank')">
+                <div class="card-icon">🤖</div>
+                <div class="card-title">Telegram Бот</div>
+                <div class="card-description">Перейти до бота в Telegram</div>
+            </div>
+        </div>
+        
+        <div class="status">
+            <div class="status-item">
+                <span>Статус бота:</span>
+                <span>
+                    <span id="bot-status">Перевірка...</span>
+                    <span id="bot-indicator" class="status-indicator loading"></span>
+                </span>
+            </div>
+            <div class="status-item">
+                <span>Google Sheets:</span>
+                <span>
+                    <span id="sheets-status">Перевірка...</span>
+                    <span id="sheets-indicator" class="status-indicator loading"></span>
+                </span>
+            </div>
+            <div class="status-item">
+                <span>Група Telegram:</span>
+                <span>
+                    Качки Чернівці
+                    <span class="status-indicator online"></span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Перевірка статусу бота
+        async function checkBotStatus() {
+            try {
+                const response = await fetch('/api/telegram');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('bot-status').textContent = 'Онлайн';
+                    document.getElementById('bot-indicator').className = 'status-indicator online';
+                    
+                    // Перевіряємо доступність Google Sheets
+                    if (data.env_check && data.env_check.sheets_id && data.env_check.service_email && data.env_check.private_key) {
+                        document.getElementById('sheets-status').textContent = 'Підключено';
+                        document.getElementById('sheets-indicator').className = 'status-indicator online';
+                    } else {
+                        document.getElementById('sheets-status').textContent = 'Не налаштовано';
+                        document.getElementById('sheets-indicator').className = 'status-indicator offline';
+                    }
+                } else {
+                    throw new Error('Bot not responding');
+                }
+            } catch (error) {
+                document.getElementById('bot-status').textContent = 'Офлайн';
+                document.getElementById('bot-indicator').className = 'status-indicator offline';
+                document.getElementById('sheets-status').textContent = 'Недоступно';
+                document.getElementById('sheets-indicator').className = 'status-indicator offline';
+            }
+        }
+        
+        // Перевірка при завантаженні сторінки
+        document.addEventListener('DOMContentLoaded', function() {
+            checkBotStatus();
+            
+            // Оновлення статусу кожні 30 секунд
+            setInterval(checkBotStatus, 30000);
+        });
+    </script>
+</body>
+</html> 
