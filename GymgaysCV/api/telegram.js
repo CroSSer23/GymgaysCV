@@ -172,8 +172,11 @@ function sendTelegramMessage(chatId, text) {
 async function handleCommand(msg) {
   const chatId = msg.chat.id;
   const command = msg.text.toLowerCase();
+  const isGroup = isGroupChat(msg);
   
-  console.log('🚀 Handling command:', command, 'from:', msg.from.first_name, msg.from.id);
+  console.log('🚀 Handling command:', command, 'from:', msg.from.first_name, msg.from.id, 'isGroup:', isGroup);
+  
+  // Логіка фільтрації команд тепер в головному обробнику
   
   try {
     if (command === '/start') {
@@ -447,13 +450,8 @@ function isGroupChat(msg) {
 async function handleRegularMessage(msg) {
   console.log('💬 Handling regular message:', msg.text);
   
-  // У групових чатах НЕ відповідаємо на звичайні повідомлення
-  if (isGroupChat(msg)) {
-    console.log('🤐 Ignoring regular text message in group chat');
-    return;
-  }
-  
-  // Тільки в приватних чатах надсилаємо інструкцію
+  // Логіка фільтрації груп тепер в головному обробнику
+  // Тут обробляємо тільки приватні чати
   const chatId = msg.chat.id;
   await sendTelegramMessage(chatId, 
     '📸 Щоб зарахувати відвідування залу, надішли фото з тренування + хештег #gym!\n\n' +
@@ -746,6 +744,14 @@ async function getTopUsers() {
 module.exports = async (req, res) => {
   console.log('📨 Received request:', req.method);
   
+  // Додаємо timeout для запобігання зависання
+  const timeoutId = setTimeout(() => {
+    if (!res.headersSent) {
+      console.log('⏰ Request timeout - sending response');
+      res.status(200).json({ ok: true, timeout: true });
+    }
+  }, 25000); // 25 секунд замість 300
+  
   if (req.method === 'POST') {
     try {
       console.log('📥 Update received:', JSON.stringify(req.body, null, 2));
@@ -765,6 +771,19 @@ module.exports = async (req, res) => {
         // Якщо це команда
         if (msg.text && msg.text.startsWith('/')) {
           console.log('⚡ Processing command:', msg.text);
+          
+          // Перевіряємо дозволені команди в групах
+          if (isGroup) {
+            const allowedGroupCommands = ['/start', '/help', '/stats', '/top', '/rules'];
+            const command = msg.text.toLowerCase();
+                         if (!allowedGroupCommands.includes(command)) {
+               console.log('🤐 Ignoring disallowed command in group:', command);
+               clearTimeout(timeoutId);
+               res.status(200).json({ ok: true, ignored: 'disallowed command in group' });
+               return;
+             }
+          }
+          
           await handleCommand(msg);
         }
         // Якщо це фото
@@ -776,6 +795,8 @@ module.exports = async (req, res) => {
             const caption = msg.caption || '';
             if (!caption.toLowerCase().includes('#gym')) {
               console.log('🤐 Ignoring photo without #gym in group chat');
+              clearTimeout(timeoutId);
+              res.status(200).json({ ok: true, ignored: 'photo without #gym in group' });
               return;
             }
           }
@@ -785,15 +806,39 @@ module.exports = async (req, res) => {
         // Звичайне повідомлення
         else if (msg.text) {
           console.log('💬 Processing regular text...');
+          
+          // У групах ігноруємо звичайні текстові повідомлення
+                     if (isGroup) {
+             console.log('🤐 Ignoring regular text message in group chat');
+             clearTimeout(timeoutId);
+             res.status(200).json({ ok: true, ignored: 'regular text in group' });
+             return;
+           }
+          
           await handleRegularMessage(msg);
         }
+        // Невідомий тип повідомлення
+                 else {
+           console.log('🤐 Ignoring unknown message type');
+           clearTimeout(timeoutId);
+           res.status(200).json({ ok: true, ignored: 'unknown message type' });
+           return;
+         }
       }
-      res.status(200).json({ ok: true });
+      
+      clearTimeout(timeoutId);
+      if (!res.headersSent) {
+        res.status(200).json({ ok: true });
+      }
     } catch (error) {
       console.error('❌ Webhook error:', error);
-      res.status(500).json({ error: 'Internal server error', details: error.message });
+      clearTimeout(timeoutId);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Internal server error', details: error.message });
+      }
     }
   } else {
+    clearTimeout(timeoutId);
     console.log('✅ Health check - Bot is running!');
     res.status(200).json({ 
       message: 'Gym Attendance Bot is running!',
