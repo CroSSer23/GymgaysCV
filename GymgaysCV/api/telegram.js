@@ -481,7 +481,7 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
     try {
       await sheets.spreadsheets.values.get({
         spreadsheetId: GOOGLE_SHEETS_ID,
-        range: `${sheetName}!A1:G1000`,
+        range: `${sheetName}!A1:F1000`,
       });
     } catch (error) {
       console.log('📄 Sheet does not exist, will create:', sheetName);
@@ -509,7 +509,7 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
         range: `${sheetName}!A1:G1`,
         valueInputOption: 'RAW',
         resource: {
-          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Час', 'Текст під фото', 'Фото']]
+          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Текст під фото', 'Фото']]
         }
       });
 
@@ -526,17 +526,17 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
     
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
       valueInputOption: 'USER_ENTERED', // Дозволяє використовувати формули
       resource: {
-        values: [[userId, userName, firstName, date, '', caption || '', photoFormula]]
+        values: [[userId, userName, firstName, date, caption || '', photoFormula]]
       }
     });
 
     // ПІСЛЯ вставки даних отримуємо актуальну кількість рядків
     const updatedData = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`
+      range: `${sheetName}!A:F`
     });
     
     const actualRowCount = updatedData.data.values ? updatedData.data.values.length : 0;
@@ -565,7 +565,7 @@ async function checkTodayAttendance(userId) {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
@@ -599,7 +599,7 @@ async function getUserStats(userId) {
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
@@ -630,7 +630,7 @@ async function getTopUsers() {
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:G`,
+      range: `${sheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
