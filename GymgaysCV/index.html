@@ -50,20 +50,20 @@
         }
 
         .cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
+            display: flex;
+            justify-content: center;
             margin-bottom: 30px;
         }
 
         .card {
             background: linear-gradient(135deg, #ff6b6b, #ee5a24);
             color: white;
-            padding: 30px 20px;
+            padding: 40px 30px;
             border-radius: 15px;
             text-decoration: none;
             transition: transform 0.3s, box-shadow 0.3s;
             cursor: pointer;
+            min-width: 300px;
         }
 
         .card:hover {
@@ -167,21 +167,9 @@
         <div class="cards">
             <a href="chat-interface.html" class="card">
                 <div class="card-icon">💬</div>
-                <div class="card-title">Чат Інтерфейс</div>
-                <div class="card-description">Відправляй повідомлення та слідкуй за чатом у реальному часі</div>
+                <div class="card-title">Відкрити Чат</div>
+                <div class="card-description">Спілкування з групою "Качки Чернівці"</div>
             </a>
-            
-            <a href="webhook-setup.html" class="card secondary">
-                <div class="card-icon">🔗</div>
-                <div class="card-title">Налаштування Webhook</div>
-                <div class="card-description">Конфігурація webhook для отримання повідомлень</div>
-            </a>
-            
-            <div class="card tertiary" onclick="window.open('https://t.me/GymAttendanceBot', '_blank')">
-                <div class="card-icon">🤖</div>
-                <div class="card-title">Telegram Бот</div>
-                <div class="card-description">Перейти до бота в Telegram</div>
-            </div>
         </div>
         
         <div class="status">
@@ -190,20 +178,6 @@
                 <span>
                     <span id="bot-status">Перевірка...</span>
                     <span id="bot-indicator" class="status-indicator loading"></span>
-                </span>
-            </div>
-            <div class="status-item">
-                <span>Google Sheets:</span>
-                <span>
-                    <span id="sheets-status">Перевірка...</span>
-                    <span id="sheets-indicator" class="status-indicator loading"></span>
-                </span>
-            </div>
-            <div class="status-item">
-                <span>Група Telegram:</span>
-                <span>
-                    Качки Чернівці
-                    <span class="status-indicator online"></span>
                 </span>
             </div>
         </div>
@@ -219,23 +193,12 @@
                 if (response.ok) {
                     document.getElementById('bot-status').textContent = 'Онлайн';
                     document.getElementById('bot-indicator').className = 'status-indicator online';
-                    
-                    // Перевіряємо доступність Google Sheets
-                    if (data.env_check && data.env_check.sheets_id && data.env_check.service_email && data.env_check.private_key) {
-                        document.getElementById('sheets-status').textContent = 'Підключено';
-                        document.getElementById('sheets-indicator').className = 'status-indicator online';
-                    } else {
-                        document.getElementById('sheets-status').textContent = 'Не налаштовано';
-                        document.getElementById('sheets-indicator').className = 'status-indicator offline';
-                    }
                 } else {
                     throw new Error('Bot not responding');
                 }
             } catch (error) {
                 document.getElementById('bot-status').textContent = 'Офлайн';
                 document.getElementById('bot-indicator').className = 'status-indicator offline';
-                document.getElementById('sheets-status').textContent = 'Недоступно';
-                document.getElementById('sheets-indicator').className = 'status-indicator offline';
             }
         }
         
