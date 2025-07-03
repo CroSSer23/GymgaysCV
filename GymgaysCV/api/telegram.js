@@ -1,6 +1,8 @@
 const TelegramBot = require('node-telegram-bot-api');
 const { google } = require('googleapis');
 const moment = require('moment');
+const fs = require('fs');
+const path = require('path');
 
 // Конфігурація
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -107,6 +109,28 @@ function getCurrentDate() {
 
 function getCurrentMonth() {
   return moment().format('MM.YYYY');
+}
+
+// Функція для отримання рандомної саркастичної фрази
+function getRandomPhrase() {
+  try {
+    const phrasesPath = path.join(__dirname, 'phrases.json');
+    const phrasesData = fs.readFileSync(phrasesPath, 'utf8');
+    const phrases = JSON.parse(phrasesData);
+    
+    if (phrases.phrases && phrases.phrases.length > 0) {
+      const randomIndex = Math.floor(Math.random() * phrases.phrases.length);
+      return phrases.phrases[randomIndex];
+    }
+    
+    // Фоллбек фраза якщо файл не завантажився
+    return "🎉 Ну нарешті! А я вже думав, що ти забув про існування залу!";
+    
+  } catch (error) {
+    console.error('❌ Error loading phrases:', error);
+    // Фоллбек фраза у випадку помилки
+    return "🏋️‍♂️ Відмінно! Відвідування зараховано!";
+  }
 }
 
 // Функція для надійної відправки повідомлень
@@ -402,7 +426,7 @@ async function handlePhoto(msg) {
     const alreadyVisited = await checkTodayAttendance(userId);
     
     if (alreadyVisited) {
-      await sendTelegramMessage(chatId, `✅ ${firstName}, твоє відвідування на сьогодні (${today}) вже зараховано! 🏋️‍♂️`);
+      await sendTelegramMessage(chatId, `🤨 ${firstName}, не жадібнич! Сьогодні (${today}) ти вже "тренувався". Один раз на день вистачить! 🏋️‍♂️`);
       return;
     }
     
@@ -420,19 +444,15 @@ async function handlePhoto(msg) {
     
     if (saved) {
       const userStats = await getUserStats(userId);
-      let successMessage = `🎉 Відмінно, ${firstName}! Відвідування зараховано!\n\n` +
+      const randomPhrase = getRandomPhrase();
+      
+      const successMessage = `${randomPhrase}\n\n` +
         `📅 Дата: ${today}\n` +
-        `🏋️‍♂️ Твоїх відвідувань цього місяця: ${userStats}\n`;
-      
-      if (caption) {
-        successMessage += `💬 Твій коментар: "${caption}"\n`;
-      }
-      
-      successMessage += `\nТак тримати! 💪`;
+        `🏋️‍♂️ Відвідувань цього місяця: ${userStats}`;
       
       await sendTelegramMessage(chatId, successMessage);
     } else {
-      await sendTelegramMessage(chatId, '❌ Виникла помилка при збереженні. Спробуй ще раз.');
+      await sendTelegramMessage(chatId, '🤦‍♂️ Ой, щось пішло не так! Навіть Google Sheets не хоче бачити твоє тренування! Спробуй ще раз.');
     }
     
   } catch (error) {
