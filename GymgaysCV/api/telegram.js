@@ -735,7 +735,10 @@ function addMessageToTemp(message) {
 
 // Webhook обробник для Vercel
 module.exports = async (req, res) => {
-  console.log('📨 Received request:', req.method);
+  // Логуємо тільки POST запити (реальні повідомлення з Telegram)
+  if (req.method === 'POST') {
+    console.log('📨 Received request:', req.method);
+  }
   
   // Додаємо timeout для запобігання зависання
   const timeoutId = setTimeout(() => {
