@@ -15,7 +15,6 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: false });
 
 // Логування ініціалізації
 console.log('🤖 Bot initialized for webhook mode');
-console.log('🔑 Token length:', BOT_TOKEN ? BOT_TOKEN.length : 'NOT SET');
 
 // Прапорець для режиму роботи
 let GOOGLE_SHEETS_AVAILABLE = false;
@@ -29,29 +28,16 @@ try {
   let serviceAccountData = null;
   
   if (processedPrivateKey) {
-    console.log('🔧 Original key starts with:', processedPrivateKey.substring(0, 50));
-    
     // Перевіряємо чи це JSON файл сервісного акаунта
     try {
       serviceAccountData = JSON.parse(processedPrivateKey);
-      console.log('📄 Detected service account JSON file');
       
       if (serviceAccountData.private_key) {
         processedPrivateKey = serviceAccountData.private_key;
-        console.log('🔑 Extracted private_key from service account JSON');
-      } else {
-        console.error('❌ No private_key field found in service account JSON');
       }
     } catch (e) {
-      console.log('📝 Not a JSON file, treating as direct private key');
+      // Не JSON файл, використовуємо як прямий ключ
     }
-    
-    console.log('🔧 After extraction, key format check:', {
-      hasBeginMarker: processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----'),
-      hasEndMarker: processedPrivateKey.includes('-----END PRIVATE KEY-----'),
-      hasEscapedNewlines: processedPrivateKey.includes('\\n'),
-      hasActualNewlines: processedPrivateKey.includes('\n')
-    });
     
     // Очищуємо ключ від зайвих символів
     processedPrivateKey = processedPrivateKey.trim();
@@ -62,27 +48,14 @@ try {
     // Нормалізуємо нові рядки
     processedPrivateKey = processedPrivateKey.replace(/\r\n/g, '\n');
     processedPrivateKey = processedPrivateKey.replace(/\r/g, '\n');
-    
-    console.log('🔑 Final key validation:', {
-      hasBeginMarker: processedPrivateKey.includes('-----BEGIN PRIVATE KEY-----'),
-      hasEndMarker: processedPrivateKey.includes('-----END PRIVATE KEY-----'),
-      keyLength: processedPrivateKey.length,
-      lineCount: processedPrivateKey.split('\n').length
-    });
   }
-  
-  console.log('🔑 Private key starts with:', processedPrivateKey ? processedPrivateKey.substring(0, 100) + '...' : 'NOT SET');
-  console.log('🔑 Private key ends with:', processedPrivateKey ? '...' + processedPrivateKey.substring(processedPrivateKey.length - 100) : 'NOT SET');
-  console.log('🔑 Private key length:', processedPrivateKey ? processedPrivateKey.length : 0);
   
   // Створюємо JWT авторизацію
   let serviceAccountEmail;
   if (serviceAccountData && serviceAccountData.client_email) {
     serviceAccountEmail = serviceAccountData.client_email;
-    console.log('📧 Using service account email from JSON:', serviceAccountEmail);
   } else {
     serviceAccountEmail = GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    console.log('📧 Using service account email from env:', serviceAccountEmail);
   }
   
   auth = new google.auth.JWT(
@@ -194,10 +167,7 @@ function sendTelegramMessage(chatId, text) {
       }
     };
 
-    console.log('📤 Sending message to chat:', chatId);
-    console.log('📦 Request data:', data);
-    console.log('📦 Data byte length:', Buffer.byteLength(data, 'utf8'));
-    console.log('📦 Text length:', text.length);
+    // Відправляємо повідомлення
     
     const req = https.request(options, (res) => {
       let responseData = '';
@@ -205,13 +175,12 @@ function sendTelegramMessage(chatId, text) {
         responseData += chunk;
       });
       res.on('end', () => {
-        console.log('📡 Telegram API response status:', res.statusCode);
-        console.log('📡 Telegram API response:', responseData);
+        // Обробляємо відповідь API
         
         try {
           const parsedResponse = JSON.parse(responseData);
           if (parsedResponse.ok) {
-            console.log('✅ Message sent successfully');
+            console.log(`🤖 БОТ → ${chatId}: "${text}"`);
           } else {
             console.error('❌ Telegram API error:', parsedResponse.description);
           }
@@ -753,53 +722,32 @@ module.exports = async (req, res) => {
   
   if (req.method === 'POST') {
     try {
-      console.log('📥 Update received:', JSON.stringify(req.body, null, 2));
-      
-      // Додаємо відформатований лог для легшого читання
+      // Простий лог повідомлення
       if (req.body.message) {
         const msg = req.body.message;
-        console.log('📋 === FORMATTED MESSAGE INFO ===');
-        console.log(`👤 From: ${msg.from.first_name} ${msg.from.last_name || ''} (@${msg.from.username || 'no_username'}) [ID: ${msg.from.id}]`);
-        console.log(`💬 Chat: "${msg.chat.title || 'Private'}" [ID: ${msg.chat.id}, Type: ${msg.chat.type}]`);
-        console.log(`🕐 Date: ${new Date(msg.date * 1000).toLocaleString('uk-UA')}`);
+        const userName = `${msg.from.first_name}${msg.from.last_name ? ' ' + msg.from.last_name : ''}`;
         
         if (msg.text) {
-          console.log(`📝 Text: "${msg.text}"`);
+          console.log(`👤 ${userName}: "${msg.text}"`);
+        } else if (msg.photo) {
+          const caption = msg.caption || '';
+          console.log(`👤 ${userName}: [ФОТО]${caption ? ' "' + caption + '"' : ''}`);
         }
-        
-        if (msg.photo) {
-          console.log(`📸 Photo: ${msg.photo.length} sizes, largest: ${msg.photo[msg.photo.length - 1].width}x${msg.photo[msg.photo.length - 1].height}`);
-          if (msg.caption) {
-            console.log(`📝 Caption: "${msg.caption}"`);
-          }
-        }
-        
-        console.log('=================================');
       }
-      
-      console.log('🔑 BOT_TOKEN exists:', !!BOT_TOKEN);
-      console.log('📋 GOOGLE_SHEETS_ID:', !!GOOGLE_SHEETS_ID);
-      console.log('📧 SERVICE_ACCOUNT_EMAIL:', !!GOOGLE_SERVICE_ACCOUNT_EMAIL);
-      console.log('🔐 PRIVATE_KEY exists:', !!GOOGLE_PRIVATE_KEY);
       
       // Обробляємо оновлення вручну
       if (req.body.message) {
-        console.log('💬 Processing message...');
         const msg = req.body.message;
         const isGroup = isGroupChat(msg);
         
-        console.log('💬 Chat type:', msg.chat.type, 'Is group:', isGroup);
-        
         // Якщо це команда
         if (msg.text && msg.text.startsWith('/')) {
-          console.log('⚡ Processing command:', msg.text);
           
           // Перевіряємо дозволені команди в групах
           if (isGroup) {
             const allowedGroupCommands = ['/start', '/help', '/stats', '/top', '/rules'];
             const command = msg.text.toLowerCase();
                          if (!allowedGroupCommands.includes(command)) {
-               console.log('🤐 Ignoring disallowed command in group:', command);
                clearTimeout(timeoutId);
                res.status(200).json({ ok: true, ignored: 'disallowed command in group' });
                return;
@@ -810,13 +758,11 @@ module.exports = async (req, res) => {
         }
         // Якщо це фото
         else if (msg.photo) {
-          console.log('📸 Processing photo...');
           
           // У групах обробляємо тільки фото з #gym
           if (isGroup) {
             const caption = msg.caption || '';
             if (!caption.toLowerCase().includes('#gym')) {
-              console.log('🤐 Ignoring photo without #gym in group chat');
               clearTimeout(timeoutId);
               res.status(200).json({ ok: true, ignored: 'photo without #gym in group' });
               return;
@@ -827,11 +773,9 @@ module.exports = async (req, res) => {
         }
         // Звичайне повідомлення
         else if (msg.text) {
-          console.log('💬 Processing regular text...');
           
           // У групах ігноруємо звичайні текстові повідомлення
                      if (isGroup) {
-             console.log('🤐 Ignoring regular text message in group chat');
              clearTimeout(timeoutId);
              res.status(200).json({ ok: true, ignored: 'regular text in group' });
              return;
@@ -841,7 +785,6 @@ module.exports = async (req, res) => {
         }
         // Невідомий тип повідомлення
                  else {
-           console.log('🤐 Ignoring unknown message type');
            clearTimeout(timeoutId);
            res.status(200).json({ ok: true, ignored: 'unknown message type' });
            return;
@@ -861,7 +804,7 @@ module.exports = async (req, res) => {
     }
   } else {
     clearTimeout(timeoutId);
-    console.log('✅ Health check - Bot is running!');
+    // Health check
     res.status(200).json({ 
       message: 'Gym Attendance Bot is running!',
       timestamp: new Date().toISOString(),

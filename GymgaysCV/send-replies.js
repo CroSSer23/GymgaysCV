@@ -18,9 +18,13 @@ async function sendMessage(text) {
     });
     
     const result = await response.json();
-    console.log(`Статус: ${response.status}`);
-    console.log(`Відповідь:`, result);
-    console.log('---');
+    
+    if (result.ok) {
+        console.log(`🤖 БОТ (РЕПЛІКА) → ${CHAT_ID}: "${text}"`);
+    } else {
+        console.log(`❌ Помилка відправки: ${response.status}`, result);
+    }
+    
     return result;
 }
 
