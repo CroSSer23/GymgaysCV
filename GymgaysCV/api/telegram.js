@@ -737,7 +737,13 @@ async function getTopUsers() {
   }
 }
 
-// Старі обробники видалені - тепер використовуємо handleCommand, handlePhoto, handleRegularMessage
+// Імпорт веб-чат API
+let chatAPI = null;
+try {
+  chatAPI = require('./chat.js');
+} catch (error) {
+  console.log('⚠️ Chat API not available, web integration disabled');
+}
 
 // Webhook обробник для Vercel
 module.exports = async (req, res) => {
@@ -789,6 +795,11 @@ module.exports = async (req, res) => {
         const isGroup = isGroupChat(msg);
         
         console.log('💬 Chat type:', msg.chat.type, 'Is group:', isGroup);
+        
+        // Інтеграція з веб-чатом - зберігаємо всі повідомлення
+        if (chatAPI && chatAPI.handleTelegramMessage) {
+          chatAPI.handleTelegramMessage(msg);
+        }
         
         // Якщо це команда
         if (msg.text && msg.text.startsWith('/')) {
