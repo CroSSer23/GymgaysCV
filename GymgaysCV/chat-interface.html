@@ -230,6 +230,7 @@
             <div class="quick-replies">
                 <button class="quick-reply-btn" onclick="sendReplies()">🔥 Відправити репліки</button>
                 <button class="quick-reply-btn" onclick="sendBossMessage()">👑 Повернення Бога</button>
+                <button class="quick-reply-btn" onclick="location.reload()">🔄 Оновити чат</button>
             </div>
             
             <div class="input-container">
@@ -466,7 +467,10 @@
                 const response = await fetch(`${API_BASE}/api/get-messages`);
                 const data = await response.json();
                 
-                console.log('📥 Отримані дані:', data); // Debug лог
+                // Debug лог тільки якщо є повідомлення
+                if (data.messages && data.messages.length > 0) {
+                    console.log('📥 Отримані дані:', data);
+                }
                 
                 if (data.ok && data.messages && data.messages.length > 0) {
                     console.log(`📨 Завантажено ${data.messages.length} повідомлень`);
@@ -474,14 +478,18 @@
                         addMessage(message);
                     });
                 } else {
-                    console.log('📭 Повідомлень не знайдено');
-                    // Показуємо початкове повідомлення тільки якщо немає реальних
-                    addMessage({
-                        text: 'Чат готовий до роботи! Очікуємо повідомлення з групи... 💪',
-                        type: 'incoming',
-                        user: 'Система',
-                        time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'})
-                    });
+                    // Не показуємо системні повідомлення щоразу
+                    if (document.querySelectorAll('.message').length === 0) {
+                        addMessage({
+                            text: `💬 Веб-чат активний! 
+                            
+⚠️ Через особливості Vercel serverless, повідомлення зберігаються тимчасово.
+Щоб побачити нові повідомлення з Telegram групи, оновіть сторінку після того як хтось напише в чат.`,
+                            type: 'incoming',
+                            user: 'Система',
+                            time: new Date().toLocaleTimeString('uk-UA', {hour: '2-digit', minute: '2-digit'})
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('Помилка завантаження повідомлень:', error);
@@ -524,8 +532,8 @@
             }
         }
         
-        // Перевірка нових повідомлень кожні 3 секунди
-        setInterval(checkForNewMessages, 3000);
+        // Перевірка нових повідомлень кожні 10 секунд (рідше щоб не флудити)
+        setInterval(checkForNewMessages, 10000);
     </script>
 </body>
 </html>
