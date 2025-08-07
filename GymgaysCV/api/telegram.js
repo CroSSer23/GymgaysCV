@@ -630,6 +630,46 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
 
     }
 
+    // Перевіряємо та створюємо лист "Import" якщо не існує
+    const importSheetName = 'Import';
+    let importSheetExists = true;
+    
+    try {
+      await sheets.spreadsheets.values.get({
+        spreadsheetId: GOOGLE_SHEETS_ID,
+        range: `${importSheetName}!A1:F1000`,
+      });
+    } catch (error) {
+      console.log('📄 Import sheet does not exist, will create:', importSheetName);
+      importSheetExists = false;
+    }
+
+    // Створюємо лист "Import" якщо не існує
+    if (!importSheetExists) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId: GOOGLE_SHEETS_ID,
+        resource: {
+          requests: [{
+            addSheet: {
+              properties: {
+                title: importSheetName
+              }
+            }
+          }]
+        }
+      });
+
+      // Додаємо заголовки до листа "Import"
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: GOOGLE_SHEETS_ID,
+        range: `${importSheetName}!A1:G1`,
+        valueInputOption: 'RAW',
+        resource: {
+          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Текст під фото', 'Фото']]
+        }
+      });
+    }
+
     // Додаємо новий запис
     // Якщо є фото, використовуємо IMAGE() функцію для вставки зображення
     let photoFormula = '';
@@ -638,14 +678,29 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
       console.log('📸 Using IMAGE formula with Telegram URL:', photoFormula);
     }
     
+    const recordData = [userId, userName, firstName, date, caption || '', photoFormula];
+    
+    // Додаємо запис до місячного листа
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_ID,
       range: `${sheetName}!A:F`,
       valueInputOption: 'USER_ENTERED', // Дозволяє використовувати формули
       resource: {
-        values: [[userId, userName, firstName, date, caption || '', photoFormula]]
+        values: [recordData]
       }
     });
+
+    // Додаємо той самий запис до листа "Import"
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: GOOGLE_SHEETS_ID,
+      range: `${importSheetName}!A:F`,
+      valueInputOption: 'USER_ENTERED', // Дозволяє використовувати формули
+      resource: {
+        values: [recordData]
+      }
+    });
+
+    console.log('✅ Record saved to both monthly sheet and Import sheet');
 
     // ПІСЛЯ вставки даних отримуємо актуальну кількість рядків
     const updatedData = await sheets.spreadsheets.values.get({

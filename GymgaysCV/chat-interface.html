@@ -329,7 +329,7 @@
             
             // Перевірка з'єднання
             checkConnection();
-            setInterval(checkConnection, 30000); // Кожні 30 секунд
+            setInterval(checkConnection, 60000); // Кожні 60 секунд
             
             // Завантаження останніх повідомлень
             loadRecentMessages();
@@ -667,8 +667,8 @@
             }
         }
         
-        // Перевірка нових повідомлень кожні 10 секунд (рідше щоб не флудити)
-        setInterval(checkForNewMessages, 10000);
+        // Перевірка нових повідомлень кожні 30 секунд (рідше щоб не флудити логами)
+        setInterval(checkForNewMessages, 30000);
     </script>
 </body>
 </html>
