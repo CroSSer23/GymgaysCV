@@ -671,14 +671,13 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
     }
 
     // Додаємо новий запис
-    // Якщо є фото, використовуємо IMAGE() функцію для вставки зображення
-    let photoFormula = '';
+    // Зберігаємо просто посилання на фото (без формули IMAGE)
+    const photoLink = photoUrl || '';
     if (photoUrl) {
-      photoFormula = `=IMAGE("${photoUrl}")`;
-      console.log('📸 Using IMAGE formula with Telegram URL:', photoFormula);
+      console.log('📸 Saving photo URL:', photoLink);
     }
     
-    const recordData = [userId, userName, firstName, date, caption || '', photoFormula];
+    const recordData = [userId, userName, firstName, date, caption || '', photoLink];
     
     // Додаємо запис до місячного листа
     await sheets.spreadsheets.values.append({
