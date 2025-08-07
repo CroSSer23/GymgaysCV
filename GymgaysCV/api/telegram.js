@@ -584,55 +584,11 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
       return false;
     }
     
-    // Перевіряємо чи існує лист для поточного місяця
-    const monthYear = getCurrentMonth();
-    const sheetName = `Відвідуваність_${monthYear}`;
-    
-    console.log('📊 Trying to access Google Sheets:', GOOGLE_SHEETS_ID);
-    
-    // Спробуємо отримати дані з листа
-    let sheetExists = true;
-    try {
-      await sheets.spreadsheets.values.get({
-        spreadsheetId: GOOGLE_SHEETS_ID,
-        range: `${sheetName}!A1:F1000`,
-      });
-    } catch (error) {
-      console.log('📄 Sheet does not exist, will create:', sheetName);
-      sheetExists = false;
-    }
-
-    // Створюємо новий лист якщо не існує
-    if (!sheetExists) {
-      await sheets.spreadsheets.batchUpdate({
-        spreadsheetId: GOOGLE_SHEETS_ID,
-        resource: {
-          requests: [{
-            addSheet: {
-              properties: {
-                title: sheetName
-              }
-            }
-          }]
-        }
-      });
-
-      // Додаємо заголовки
-      await sheets.spreadsheets.values.update({
-        spreadsheetId: GOOGLE_SHEETS_ID,
-        range: `${sheetName}!A1:G1`,
-        valueInputOption: 'RAW',
-        resource: {
-          values: [['User ID', "Ім'я користувача", "Ім'я", 'Дата відвідування', 'Текст під фото', 'Фото']]
-        }
-      });
-
-
-    }
-
     // Перевіряємо та створюємо лист "Import" якщо не існує
     const importSheetName = 'Import';
     let importSheetExists = true;
+    
+    console.log('📊 Trying to access Google Sheets:', GOOGLE_SHEETS_ID);
     
     try {
       await sheets.spreadsheets.values.get({
@@ -679,17 +635,7 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
     
     const recordData = [userId, userName, firstName, date, caption || '', photoLink];
     
-    // Додаємо запис до місячного листа
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:F`,
-      valueInputOption: 'USER_ENTERED', // Дозволяє використовувати формули
-      resource: {
-        values: [recordData]
-      }
-    });
-
-    // Додаємо той самий запис до листа "Import"
+    // Додаємо запис тільки до листа "Import"
     await sheets.spreadsheets.values.append({
       spreadsheetId: GOOGLE_SHEETS_ID,
       range: `${importSheetName}!A:F`,
@@ -699,12 +645,12 @@ async function saveAttendance(userId, userName, firstName, date, caption = '', p
       }
     });
 
-    console.log('✅ Record saved to both monthly sheet and Import sheet');
+    console.log('✅ Record saved to Import sheet');
 
     // ПІСЛЯ вставки даних отримуємо актуальну кількість рядків
     const updatedData = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:F`
+      range: `${importSheetName}!A:F`
     });
     
     const actualRowCount = updatedData.data.values ? updatedData.data.values.length : 0;
