@@ -80,10 +80,6 @@ function getCurrentDate() {
   return moment().format('DD.MM.YYYY');
 }
 
-function getCurrentMonth() {
-  return moment().format('MM.YYYY');
-}
-
 // Функції для роботи з тижнями
 function getWeekStart() {
   return moment().startOf('isoWeek'); // Понеділок як початок тижня
@@ -673,13 +669,12 @@ async function checkTodayAttendance(userId) {
       return false; // Дозволити відвідування якщо не можемо перевірити
     }
     
-    const monthYear = getCurrentMonth();
-    const sheetName = `Відвідуваність_${monthYear}`;
+    const importSheetName = 'Import';
     const today = getCurrentDate();
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:F`,
+      range: `${importSheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
@@ -706,14 +701,13 @@ async function getUserStats(userId) {
       return 0;
     }
     
-    const monthYear = getCurrentMonth();
-    const sheetName = `Відвідуваність_${monthYear}`;
+    const importSheetName = 'Import';
 
-    console.log('📊 Getting user weekly stats for sheet:', sheetName);
+    console.log('📊 Getting user weekly stats for sheet:', importSheetName);
     
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:F`,
+      range: `${importSheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
@@ -748,12 +742,11 @@ async function getUserStats(userId) {
 // Функція для отримання топ користувачів за поточний тиждень
 async function getTopUsers() {
   try {
-    const monthYear = getCurrentMonth();
-    const sheetName = `Відвідуваність_${monthYear}`;
+    const importSheetName = 'Import';
 
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: GOOGLE_SHEETS_ID,
-      range: `${sheetName}!A:F`,
+      range: `${importSheetName}!A:F`,
     });
 
     const rows = response.data.values || [];
